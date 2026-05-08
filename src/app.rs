@@ -3,7 +3,7 @@ use tokio::sync::{mpsc, RwLock};
 use tracing::info;
 use crate::config::Config;
 use crate::services::mqtt_brokerage::manager::{register_onto as register_mqtt_broker, start_mosquitto_brokerage};
-use crate::services::mqtt_brokerage::provision_broker_cert;
+use crate::services::mqtt_brokerage::provision_mqtt_broker_cert;
 use crate::services::mqtt_client::manager::{register_onto as register_mqtt_client, start_mqtt_client};
 use crate::services::mqtt_client::{self, MqttClientHandle, MqttMessageReceiver};
 use rumqttc::QoS;
@@ -25,6 +25,37 @@ pub struct App {
     own_gateway_url: Option<String>,
     beacon_topic_rx: mpsc::Receiver<String>,
     broadcast_topics: Arc<RwLock<Vec<String>>>,
+}
+
+/// Cloneable subset of App state used by the broadcast loop.
+pub struct BroadcastState {
+    server_url: String,
+    mqtt_handle: MqttClientHandle,
+    broadcast_topics: Arc<RwLock<Vec<String>>>,
+}
+
+impl BroadcastState {
+    pub async fn run_broadcast_loop(self) {
+        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(300));
+        loop {
+            interval.tick().await;
+            let payload = serde_json::json!({ "server_url": self.server_url });
+            let payload_str = payload.to_string();
+
+            let topics = self.broadcast_topics.read().await;
+            for topic in topics.iter() {
+                if let Err(e) = self
+                    .mqtt_handle
+                    .publish(topic, QoS::AtLeastOnce, payload_str.clone())
+                    .await
+                {
+                    tracing::error!(topic, "Failed to publish beacon broadcast: {}", e);
+                } else {
+                    info!(topic, "Broadcast published to beacon topic");
+                }
+            }
+        }
+    }
 }
 
 impl App {
@@ -57,7 +88,7 @@ impl App {
 
         // ── Provision broker TLS cert ────────────────────────────────────
         if config.mqtt_brokerage.tls_enabled {
-            if let Err(e) = provision_broker_cert(&ca_service, &config.mqtt_brokerage).await {
+            if let Err(e) = provision_mqtt_broker_cert(&ca_service, &config.mqtt_brokerage).await {
                 tracing::error!("{}", e);
                 std::process::exit(1);
             }
@@ -128,25 +159,11 @@ impl App {
         }
     }
 
-    pub async fn run_broadcast_loop(&self) {
-        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(300));
-        loop {
-            interval.tick().await;
-            let payload = serde_json::json!({ "server_url": self.server_url });
-            let payload_str = payload.to_string();
-
-            let topics = self.broadcast_topics.read().await;
-            for topic in topics.iter() {
-                if let Err(e) = self
-                    .mqtt_handle
-                    .publish(topic, QoS::AtLeastOnce, payload_str.clone())
-                    .await
-                {
-                    tracing::error!(topic, "Failed to publish beacon broadcast: {}", e);
-                } else {
-                    info!(topic, "Broadcast published to beacon topic");
-                }
-            }
+    pub fn broadcast_state(&self) -> BroadcastState {
+        BroadcastState {
+            server_url: self.server_url.clone(),
+            mqtt_handle: self.mqtt_handle.clone(),
+            broadcast_topics: Arc::clone(&self.broadcast_topics),
         }
     }
 

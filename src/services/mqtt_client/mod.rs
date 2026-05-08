@@ -1,5 +1,6 @@
 pub mod manager;
 pub mod mqtt_client_service;
+pub mod tasks;
 
 pub use mqtt_client_service::{
     MqttClientHandle, MqttClientService, MqttCommand, MqttMessage, MqttMessageReceiver,

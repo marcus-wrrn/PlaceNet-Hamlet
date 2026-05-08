@@ -14,6 +14,8 @@ async fn main() {
     let config = Config::from_env();
     let ctx = App::initialize(config).await;
 
+    let broadcast = ctx.broadcast_state();
+    tokio::spawn(broadcast.run_broadcast_loop());
     tokio::spawn(ctx.run_beacon_message_loop());
 
     tokio::signal::ctrl_c().await.ok();
