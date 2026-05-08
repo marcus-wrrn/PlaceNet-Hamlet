@@ -1,13 +1,12 @@
+use rumqttc::QoS;
 use tokio::sync::{mpsc, oneshot};
 use tracing::{info, warn, error};
 
 use crate::config::MqttClientConfig;
 use crate::supervisor::{Supervisor, SupervisorHandle};
 use crate::services::ServiceId;
-use super::{
-    MqttClientHandle, MqttClientService, MqttCommand, MqttMessage,
-    MqttMessageReceiver, MqttOutboundSender,
-};
+use super::internals::{MqttCommand, MqttMessage, MqttMessageReceiver, MqttOutboundSender, TopicSubscription};
+use super::mqtt_client_service::{MqttClientHandle, MqttClientService};
 
 const CMD_CAPACITY: usize = 64;
 const MSG_CAPACITY: usize = 64;
@@ -70,6 +69,14 @@ pub fn register_onto(
 
     supervisor.register(ServiceId::MqttClient, Box::new(manager.service), available);
     handles
+}
+
+/// Load required subscriptions for beacon communications
+pub fn required_subscriptions() -> Vec<TopicSubscription> {
+    vec![
+        TopicSubscription { topic: "registration", qos: QoS::AtLeastOnce },
+        TopicSubscription { topic: "key-bridge", qos: QoS::AtLeastOnce },
+    ]
 }
 
 /// Start the MQTT client service via the supervisor.

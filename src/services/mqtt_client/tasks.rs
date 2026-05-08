@@ -2,7 +2,7 @@ use rumqttc::{AsyncClient, Event, EventLoop, Packet, QoS};
 use tokio::sync::{mpsc, oneshot};
 use tracing::{debug, error, info, warn};
 
-use super::mqtt_client_service::{MqttCommand, MqttMessage, MqttMessageSender, MqttOutboundReceiver};
+use super::internals::{MqttCommand, MqttMessage, MqttMessageSender, MqttOutboundReceiver};
 
 /// Spawns the MQTT event loop task, which drives three concurrent concerns:
 /// - **Shutdown**: stops the client and exits cleanly when `shutdown_rx` fires.

@@ -48,7 +48,7 @@ fn get_local_ips() -> Vec<std::net::IpAddr> {
 }
 
 /// Write the CA cert and a fresh broker TLS cert/key to the paths in `cfg`.
-pub async fn provision_broker_cert(ca: &CaService, cfg: &MqttBrokerageConfig) -> Result<(), String> {
+pub async fn provision_mqtt_broker_cert(ca: &CaService, cfg: &MqttBrokerageConfig) -> Result<(), String> {
     if let Some(parent) = cfg.certfile.parent() {
         tokio::fs::create_dir_all(parent).await
             .map_err(|e| format!("Failed to create broker cert dir: {e}"))?;

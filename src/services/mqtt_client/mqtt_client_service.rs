@@ -1,11 +1,11 @@
 use async_trait::async_trait;
-use bytes::Bytes;
 use rumqttc::{AsyncClient, MqttOptions, QoS, Transport};
 use tokio::sync::{mpsc, oneshot};
 
 use crate::config::MqttClientConfig;
 use crate::infra::ca::CaService;
 use crate::supervisor::ManagedService;
+use super::internals::{MqttCommand, MqttMessageSender, MqttOutboundReceiver, TopicSubscription};
 use super::tasks;
 
 pub async fn provision_node_identity(ca: &CaService, cfg: &MqttClientConfig) -> Result<(), String> {
@@ -19,50 +19,6 @@ pub async fn provision_node_identity(ca: &CaService, cfg: &MqttClientConfig) -> 
     tokio::fs::write(&cfg.keyfile, &key_pem).await
         .map_err(|e| format!("Failed to write node key: {e}"))?;
     Ok(())
-}
-
-#[derive(Debug, Clone)]
-pub struct MqttMessage {
-    pub topic: String,
-    pub payload: Bytes,
-}
-
-pub type MqttMessageSender = mpsc::Sender<MqttMessage>;
-pub type MqttMessageReceiver = mpsc::Receiver<MqttMessage>;
-pub type MqttOutboundSender = mpsc::Sender<MqttMessage>;
-pub type MqttOutboundReceiver = mpsc::Receiver<MqttMessage>;
-
-/// A single MQTT topic the client must subscribe to, paired with its required QoS level.
-#[derive(Debug, Clone)]
-pub struct TopicSubscription {
-    pub topic: &'static str,
-    pub qos: QoS,
-}
-
-/// Returns the canonical list of topics this node must subscribe to on startup.
-pub fn required_subscriptions() -> Vec<TopicSubscription> {
-    vec![
-        TopicSubscription { topic: "registration", qos: QoS::AtLeastOnce },
-    ]
-}
-
-pub enum MqttCommand {
-    Subscribe {
-        topic: String,
-        qos: QoS,
-        reply: oneshot::Sender<Result<(), String>>,
-    },
-    Unsubscribe {
-        topic: String,
-        reply: oneshot::Sender<Result<(), String>>,
-    },
-    Publish {
-        topic: String,
-        qos: QoS,
-        payload: Vec<u8>,
-        reply: oneshot::Sender<Result<(), String>>,
-    },
-    Shutdown,
 }
 
 #[derive(Clone)]

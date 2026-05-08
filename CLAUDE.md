@@ -62,6 +62,7 @@ placenet-home/
     │   ├── mqtt_client/
     │   │   ├── mod.rs           ← re-exports MqttClientService, MqttClientHandle, MqttMessage, required_subscriptions, etc.
     │   │   ├── mqtt_client_service.rs ← MqttClientService, MqttClientHandle, MqttMessage, required_subscriptions()
+    │   │   ├── tasks.rs         ← spawn_eventloop_task(), spawn_command_task() — tokio task helpers
     │   │   └── manager.rs       ← register_onto(), start_mqtt_client(), MqttHandles
     │   └── peer/
     │       └── mod.rs           ← send_message() — plain HTTP POST to peer placenet-home node
