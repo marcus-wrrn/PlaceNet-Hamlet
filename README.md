@@ -21,9 +21,11 @@ The Hamlet is built with the philosophy that it should be cross compatible with 
 
 ## Current state of the project
 
-The project is currently in early Alpha. PlaceNet nodes are able to send messages to each other over the internet but are unable to serve content or route through other services. NAT traversal is currently in the works. If you would like to support this project please consider making a contribution to any of these repositories:
+The project is currently in early Alpha. PlaceNet nodes are able to send messages to each other over the internet but are unable to serve content or route through other services. NAT traversal is currently in the works. If you would like to support this project please consider making a contribution to the following projects:
 
+[PlaceNet Beacon](https://github.com/marcus-wrrn/PlaceNet-Beacon)
 
+Currently the Coordination server
 
 ## AI Usage
 
@@ -36,4 +38,4 @@ Vibe coding is greatly discouraged when making contributions.
 PlaceNet is greatly inspired by both Meshtastic and Tailscale. While PlaceNet differs in many key ways, understanding both projects can help one understand how PlaceNet aims to be implemented.
 
 [Meshatastic](https://meshtastic.org/)
-[Tailscale](https://tailscale.com/)
+[Tailscale](https://tailscale.com/blog/how-tailscale-works)
