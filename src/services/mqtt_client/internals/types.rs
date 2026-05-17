@@ -35,5 +35,4 @@ pub enum MqttCommand {
         payload: Vec<u8>,
         reply: oneshot::Sender<Result<(), String>>,
     },
-    Shutdown,
 }

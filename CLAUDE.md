@@ -61,7 +61,8 @@ placenet-home/
     │   │   └── registration.rs  ← register_onto(), start_mosquitto_brokerage()
     │   ├── mqtt_client/
     │   │   ├── mod.rs           ← re-exports MqttClientService, MqttClientHandle, MqttMessage, required_subscriptions, etc.
-    │   │   ├── mqtt_client_service.rs ← MqttClientService, MqttClientHandle, MqttMessage, required_subscriptions()
+    │   │   ├── mqtt_client_service.rs ← MqttClientService, MqttClientHandle, ManagedService impl
+    │   │   ├── provisioning.rs  ← provision_node_identity() — writes CA-issued cert/key to disk
     │   │   ├── tasks.rs         ← spawn_eventloop_task(), spawn_command_task() — tokio task helpers
     │   │   └── manager.rs       ← register_onto(), start_mqtt_client(), MqttHandles
     │   └── peer/

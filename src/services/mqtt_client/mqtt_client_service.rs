@@ -3,23 +3,9 @@ use rumqttc::{AsyncClient, MqttOptions, QoS, Transport};
 use tokio::sync::{mpsc, oneshot};
 
 use crate::config::MqttClientConfig;
-use crate::infra::ca::CaService;
 use crate::supervisor::ManagedService;
 use super::internals::{MqttCommand, MqttMessageSender, MqttOutboundReceiver, TopicSubscription};
 use super::tasks;
-
-pub async fn provision_node_identity(ca: &CaService, cfg: &MqttClientConfig) -> Result<(), String> {
-    let (cert_pem, key_pem) = ca.ensure_node_identity().await?;
-    if let Some(parent) = cfg.certfile.parent() {
-        tokio::fs::create_dir_all(parent).await
-            .map_err(|e| format!("Failed to create cert dir: {e}"))?;
-    }
-    tokio::fs::write(&cfg.certfile, &cert_pem).await
-        .map_err(|e| format!("Failed to write node cert: {e}"))?;
-    tokio::fs::write(&cfg.keyfile, &key_pem).await
-        .map_err(|e| format!("Failed to write node key: {e}"))?;
-    Ok(())
-}
 
 #[derive(Clone)]
 pub struct MqttClientHandle {
@@ -84,6 +70,7 @@ pub struct MqttClientService {
     cmd_tx: mpsc::Sender<MqttCommand>,
     cmd_rx: Option<mpsc::Receiver<MqttCommand>>,
     shutdown_tx: Option<oneshot::Sender<()>>,
+    cmd_shutdown_tx: Option<oneshot::Sender<()>>,
     msg_tx: MqttMessageSender,
     out_rx: Option<MqttOutboundReceiver>,
     connected_tx: Option<oneshot::Sender<()>>,
@@ -105,6 +92,7 @@ impl MqttClientService {
             cmd_tx,
             cmd_rx: Some(cmd_rx),
             shutdown_tx: None,
+            cmd_shutdown_tx: None,
             msg_tx,
             out_rx: Some(out_rx),
             connected_tx: Some(connected_tx),
@@ -173,10 +161,12 @@ impl ManagedService for MqttClientService {
         let (client, eventloop) = AsyncClient::new(opts, 10);
 
         let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
+        let (cmd_shutdown_tx, cmd_shutdown_rx) = oneshot::channel::<()>();
         self.shutdown_tx = Some(shutdown_tx);
+        self.cmd_shutdown_tx = Some(cmd_shutdown_tx);
 
         tasks::spawn_eventloop_task(client.clone(), eventloop, out_rx, msg_tx, shutdown_rx, Some(connected_tx));
-        tasks::spawn_command_task(client, cmd_rx);
+        tasks::spawn_command_task(client, cmd_rx, cmd_shutdown_rx);
 
         Ok(0)
     }
@@ -184,6 +174,9 @@ impl ManagedService for MqttClientService {
     async fn stop(&mut self) -> Result<(), String> {
         if let Some(tx) = self.shutdown_tx.take() {
             let _ = tx.send(());
+            if let Some(cmd_tx) = self.cmd_shutdown_tx.take() {
+                let _ = cmd_tx.send(());
+            }
             Ok(())
         } else {
             Err("MqttClientService is not running".to_string())

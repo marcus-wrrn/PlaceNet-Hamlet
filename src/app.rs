@@ -35,6 +35,10 @@ pub struct BroadcastState {
 }
 
 impl BroadcastState {
+    /// Periodically publishes this node's `server_url` to all registered beacon topics.
+    ///
+    /// Fires every 300 seconds. Iterates over `broadcast_topics` and publishes a JSON payload
+    /// `{"server_url": "..."}` to each topic at QoS 1. Runs until the task is cancelled.
     pub async fn run_broadcast_loop(self) {
         let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(300));
         loop {
@@ -101,7 +105,6 @@ impl App {
 
         // ── Register gateway service ─────────────────────────────────────
         let (beacon_topic_tx, beacon_topic_rx) = mpsc::channel::<String>(64);
-        let broadcast_topics: Arc<RwLock<Vec<String>>> = Arc::new(RwLock::new(Vec::new()));
         register_gateway(&mut supervisor, config.http, brokerage_info, brokerage_handle, ca_service.clone(), Some(beacon_topic_tx));
 
         // ── Provision node identity for MQTT mutual TLS ──────────────────
@@ -148,6 +151,7 @@ impl App {
             start_cloud_gateway(&supervisor_handle).await;
         }
 
+        let broadcast_topics: Arc<RwLock<Vec<String>>> = Arc::new(RwLock::new(Vec::new()));
         Self {
             _supervisor_handle: supervisor_handle,
             inbound_rx,

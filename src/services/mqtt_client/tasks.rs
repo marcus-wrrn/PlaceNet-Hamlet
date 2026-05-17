@@ -78,43 +78,47 @@ pub fn spawn_eventloop_task(
 /// Spawns the MQTT command task, which serializes control operations against the broker.
 /// Receives [`MqttCommand`] variants over `cmd_rx` and dispatches them to the rumqttc
 /// `AsyncClient`: `Subscribe`, `Unsubscribe`, and `Publish` each return their result via
-/// a oneshot reply channel. A `Shutdown` command terminates the loop.
-pub fn spawn_command_task(client: AsyncClient, mut cmd_rx: mpsc::Receiver<MqttCommand>) {
+/// a oneshot reply channel. Exits when `shutdown_rx` fires or `cmd_rx` is closed.
+pub fn spawn_command_task(client: AsyncClient, mut cmd_rx: mpsc::Receiver<MqttCommand>, mut shutdown_rx: oneshot::Receiver<()>) {
     tokio::spawn(async move {
-        while let Some(cmd) = cmd_rx.recv().await {
-            match cmd {
-                MqttCommand::Subscribe { topic, qos, reply } => {
-                    let result = client
-                        .subscribe(&topic, qos)
-                        .await
-                        .map_err(|e| format!("subscribe failed: {}", e));
-                    if result.is_ok() {
-                        info!(topic = %topic, "MQTT subscribed");
-                    }
-                    let _ = reply.send(result);
-                }
-                MqttCommand::Unsubscribe { topic, reply } => {
-                    let result = client
-                        .unsubscribe(&topic)
-                        .await
-                        .map_err(|e| format!("unsubscribe failed: {}", e));
-                    if result.is_ok() {
-                        info!(topic = %topic, "MQTT unsubscribed");
-                    }
-                    let _ = reply.send(result);
-                }
-                MqttCommand::Publish { topic, qos, payload, reply } => {
-                    let result = client
-                        .publish(&topic, qos, false, payload)
-                        .await
-                        .map_err(|e| format!("publish failed: {}", e));
-                    if let Err(ref e) = result {
-                        error!(topic = %topic, error = %e, "MQTT publish error");
-                    }
-                    let _ = reply.send(result);
-                }
-                MqttCommand::Shutdown => {
+        loop {
+            tokio::select! {
+                _ = &mut shutdown_rx => {
+                    info!("MQTT command task shutting down");
                     break;
+                }
+                cmd = cmd_rx.recv() => match cmd {
+                    Some(MqttCommand::Subscribe { topic, qos, reply }) => {
+                        let result = client
+                            .subscribe(&topic, qos)
+                            .await
+                            .map_err(|e| format!("subscribe failed: {}", e));
+                        if result.is_ok() {
+                            info!(topic = %topic, "MQTT subscribed");
+                        }
+                        let _ = reply.send(result);
+                    }
+                    Some(MqttCommand::Unsubscribe { topic, reply }) => {
+                        let result = client
+                            .unsubscribe(&topic)
+                            .await
+                            .map_err(|e| format!("unsubscribe failed: {}", e));
+                        if result.is_ok() {
+                            info!(topic = %topic, "MQTT unsubscribed");
+                        }
+                        let _ = reply.send(result);
+                    }
+                    Some(MqttCommand::Publish { topic, qos, payload, reply }) => {
+                        let result = client
+                            .publish(&topic, qos, false, payload)
+                            .await
+                            .map_err(|e| format!("publish failed: {}", e));
+                        if let Err(ref e) = result {
+                            error!(topic = %topic, error = %e, "MQTT publish error");
+                        }
+                        let _ = reply.send(result);
+                    }
+                    None => break,
                 }
             }
         }

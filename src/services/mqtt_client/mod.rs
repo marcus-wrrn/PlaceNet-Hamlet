@@ -7,5 +7,5 @@ pub use internals::{
     MqttCommand, MqttMessage, MqttMessageReceiver, MqttMessageSender,
     MqttOutboundReceiver, MqttOutboundSender, TopicSubscription,
 };
-pub use manager::required_subscriptions;
-pub use mqtt_client_service::{MqttClientHandle, MqttClientService, provision_node_identity};
+pub use manager::{required_subscriptions, provision_node_identity};
+pub use mqtt_client_service::{MqttClientHandle, MqttClientService};
