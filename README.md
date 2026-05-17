@@ -24,6 +24,9 @@ The Hamlet is built with the philosophy that it should be cross compatible with 
 The project is currently in early Alpha. PlaceNet nodes are able to send messages to each other over the internet but are unable to serve content or route through other services. NAT traversal is currently in the works. If you would like to support this project please consider making a contribution to the following projects:
 
 [PlaceNet Beacon](https://github.com/marcus-wrrn/PlaceNet-Beacon)
+- Device responsible for broadcasting PlaceNet messages over LoRa for authentication and discovery
+[PlaceNet Cloud Gateway](https://github.com/marcus-wrrn/PlaceNet-Cloud-Gateway)
+- Coordination server responsible for establishing P2P connections and managing high level network changes
 
 Currently the Coordination server
 
