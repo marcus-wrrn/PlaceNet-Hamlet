@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use placenet_home::services::{BinaryInfo, ServiceCapabilities};
+use hamlet::services::{BinaryInfo, ServiceCapabilities};
 
 fn caps_with(name: &str, path: &str) -> ServiceCapabilities {
     let mut binaries = HashMap::new();

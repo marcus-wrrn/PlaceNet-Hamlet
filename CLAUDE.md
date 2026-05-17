@@ -1,11 +1,11 @@
-# PlaceNet Home
+# Hamlet
 
 A Rust service that acts as a local hub for the PlaceNet network. It manages a Certificate Authority, a Mosquitto MQTT broker, an MQTT client, and an HTTP/HTTPS reverse proxy — all orchestrated by an internal supervisor.
 
 ## Directory Structure
 
 ```
-placenet-home/
+hamlet/
 ├── Cargo.toml
 ├── Cargo.lock
 ├── .env
@@ -14,7 +14,7 @@ placenet-home/
 │   ├── 0002_device_certs.sql    ← Issued device cert records
 │   └── 0003_node_identity.sql   ← This node's own MQTT client cert + key
 ├── static/
-│   └── index.html               ← (upstream app content, not served by placenet-home)
+│   └── index.html               ← (upstream app content, not served by hamlet)
 ├── tests/
 │   ├── common/mod.rs            ← Shared test helpers
 │   ├── ca_service.rs            ← CaService integration tests
@@ -66,7 +66,7 @@ placenet-home/
     │   │   ├── tasks.rs         ← spawn_eventloop_task(), spawn_command_task() — tokio task helpers
     │   │   └── manager.rs       ← register_onto(), start_mqtt_client(), MqttHandles
     │   └── peer/
-    │       └── mod.rs           ← send_message() — plain HTTP POST to peer placenet-home node
+    │       └── mod.rs           ← send_message() — plain HTTP POST to peer hamlet node
     └── rendering/
         ├── mod.rs
         └── startup_screen.rs
@@ -130,7 +130,7 @@ All config is loaded via `Config::from_env()`. Relevant variables:
 | `MQTT_PORT` | `1883` | Plain MQTT port |
 | `MQTTS_PORT` | `8883` | TLS MQTT port |
 | `MQTT_TLS_ENABLED` | `false` | Enable TLS on the MQTT broker/client |
-| `MQTT_CLIENT_ID` | `placenet-home` | MQTT client identifier |
+| `MQTT_CLIENT_ID` | `hamlet` | MQTT client identifier |
 | `MQTT_USERNAME` | `placenet` | MQTT auth username |
 | `MQTT_PASSWORD` | `changeme` | MQTT auth password |
 | `MQTT_CAFILE` | `certs/ca.crt` (relative to config dir) | CA cert for MQTT TLS |
@@ -138,7 +138,7 @@ All config is loaded via `Config::from_env()`. Relevant variables:
 | `MQTT_KEYFILE` | `certs/broker.key` | Broker TLS key |
 | `MQTT_CLIENT_CERTFILE` | `certs/client.crt` | Client cert for home node's MQTT mutual TLS |
 | `MQTT_CLIENT_KEYFILE` | `certs/client.key` | Client key for home node's MQTT mutual TLS |
-| `PEER_URL` | _(unset)_ | Base URL of peer placenet-home node |
+| `PEER_URL` | _(unset)_ | Base URL of peer hamlet node |
 | `PLACENET_SERVER_URL` | `http://localhost:8080` | This server's identity URL (opaque ID sent to gateway) |
 | `PLACENET_GATEWAY_URL` | _(unset)_ | Cloud gateway WebSocket URL — enables `CloudGatewayService` when set |
 

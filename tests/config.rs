@@ -1,5 +1,5 @@
 use std::path::PathBuf;
-use placenet_home::config::MqttBrokerageConfig;
+use hamlet::config::MqttBrokerageConfig;
 
 fn make_config_in(dir: &std::path::Path, tls_enabled: bool) -> MqttBrokerageConfig {
     let config_file = dir.join("mosquitto.conf");
@@ -7,7 +7,7 @@ fn make_config_in(dir: &std::path::Path, tls_enabled: bool) -> MqttBrokerageConf
     MqttBrokerageConfig {
         port: 1883,
         mqtts_port: 8883,
-        client_id: "placenet-home".to_string(),
+        client_id: "hamlet".to_string(),
         config_file,
         password_file: password_file.clone(),
         username: "placenet".to_string(),

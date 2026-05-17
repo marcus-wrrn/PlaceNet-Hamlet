@@ -5,7 +5,7 @@ use http_body_util::{BodyExt, Full};
 use tokio::net::TcpStream;
 use tracing::{error, info};
 
-/// Send a plain-text message to a peer placenet-home node.
+/// Send a plain-text message to a peer hamlet node.
 ///
 /// `base_url` should be like `"http://127.0.0.1:9090"` (no trailing slash).
 pub async fn send_message(base_url: &str, message: &str) -> Result<(), String> {

@@ -16,9 +16,9 @@ pub enum GatewayMessage {
 
     /// Forwarded beacon registration payload. Sent after connecting to a gateway
     /// that was advertised by a beacon, so the gateway knows which device caused
-    /// the connection and which placenet-home forwarded it.
+    /// the connection and which hamlet forwarded it.
     BeaconRegistration {
-        /// URL of the placenet-home server forwarding this message.
+        /// URL of the hamlet server forwarding this message.
         server_url: String,
         /// Raw payload published by the beacon on the "registration" MQTT topic.
         payload: serde_json::Value,

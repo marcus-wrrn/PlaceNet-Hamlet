@@ -94,7 +94,7 @@ pub fn generate_node_identity(ca: &CaState) -> Result<(String, String, i64, i64)
 
     let mut params = CertificateParams::default();
     let mut dn = DistinguishedName::new();
-    dn.push(DnType::CommonName, "placenet-home");
+    dn.push(DnType::CommonName, "hamlet");
     dn.push(DnType::OrganizationName, "PlaceNet");
     params.distinguished_name = dn;
     params.extended_key_usages = vec![ExtendedKeyUsagePurpose::ClientAuth];

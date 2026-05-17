@@ -35,13 +35,13 @@ pub struct MqttBrokerageInfo {
 }
 
 /// Wraps a raw beacon MQTT registration payload with this server's identity
-/// information so that receiving peers know which placenet-home forwarded the
+/// information so that receiving peers know which hamlet forwarded the
 /// message and how to reach the cloud gateway.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct EnrichedRegistrationMessage {
     /// Raw payload published by the beacon on the "registration" MQTT topic.
     pub beacon_payload: serde_json::Value,
-    /// URL of the placenet-home server that received and forwarded this message.
+    /// URL of the hamlet server that received and forwarded this message.
     /// Used as an opaque identity/ID by the cloud gateway.
     pub server_url: String,
     /// URL of the cloud gateway WebSocket endpoint, if configured.

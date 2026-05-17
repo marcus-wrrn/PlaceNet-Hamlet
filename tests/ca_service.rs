@@ -1,6 +1,6 @@
 mod common;
 
-use placenet_home::infra::ca::CaService;
+use hamlet::infra::ca::CaService;
 
 async fn initialized_service() -> CaService {
     let pool = common::setup_db().await;

@@ -1,7 +1,7 @@
 use rustls;
 use tracing::info;
-use placenet_home::config::Config;
-use placenet_home::app::App;
+use hamlet::config::Config;
+use hamlet::app::App;
 
 #[tokio::main]
 async fn main() {

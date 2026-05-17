@@ -1,6 +1,6 @@
 mod common;
 
-use placenet_home::infra::ca::operations::{load_or_generate_ca, sign_csr};
+use hamlet::infra::ca::operations::{load_or_generate_ca, sign_csr};
 
 #[tokio::test]
 async fn generates_new_ca_when_db_empty() {

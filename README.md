@@ -18,6 +18,7 @@ A Hamlet serves as the 'brain' of a PlaceNet website. It is intended to be run o
 The Hamlet is built with the philosophy that it should be cross compatible with all forms of Web content. It should be able to serve not only static webpages but also allow for Video Streaming, Game Servers and all forms of Web Apps. In practice this means that a Hamlet serves as a reverse proxy similar to nginx or caddy. It is responsible for handling TLS, Routing and of course PoP - while all other content servers run through it. 
 
 
+
 ## Current state of the project
 
 The project is currently in early Alpha. PlaceNet nodes are able to send messages to each other over the internet but are unable to serve content or route through other services. NAT traversal is currently in the works. If you would like to support this project please consider making a contribution to any of these repositories:

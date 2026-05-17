@@ -1,6 +1,6 @@
 use async_trait::async_trait;
-use placenet_home::supervisor::{ManagedService, ServiceStatus, Supervisor};
-use placenet_home::services::ServiceId;
+use hamlet::supervisor::{ManagedService, ServiceStatus, Supervisor};
+use hamlet::services::ServiceId;
 
 struct MockService {
     running: bool,
