@@ -11,7 +11,7 @@ use tokio_rustls::TlsAcceptor;
 use tracing::{error, info, warn};
 
 use super::handlers::{handle_client_register, handle_device_init, handle_health};
-use super::headers::{HEADER_HEALTH, HEADER_INIT, HEADER_REGISTER};
+use super::types::{HEADER_HEALTH, HEADER_INIT, HEADER_REGISTER};
 use super::response::text_response;
 use super::{AppState, BoxError, ProxyBody};
 

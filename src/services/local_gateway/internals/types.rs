@@ -11,6 +11,15 @@ use crate::services::mqtt_brokerage::MqttBrokerageHandle;
 
 pub const SUPPORTED_VERSION: &str = "0.0.1";
 
+/// Device handshake: sign CSR, return cert + brokerage info.
+pub(super) const HEADER_INIT: &str = "x-placenet-init";
+
+/// Client cert registration: sign CSR, return cert + CA cert.
+pub(super) const HEADER_REGISTER: &str = "x-placenet-register";
+
+/// Health check: returns 200 OK.
+pub(super) const HEADER_HEALTH: &str = "x-placenet-health";
+
 /// mDNS settings advertised by the device.
 #[derive(Debug, Deserialize)]
 pub struct MdnsConfig {

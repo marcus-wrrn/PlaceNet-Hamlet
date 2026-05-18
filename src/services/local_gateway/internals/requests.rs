@@ -4,7 +4,7 @@ use hyper::{Request, Response};
 use tracing::warn;
 
 use super::types::DeviceInfo;
-use super::headers::HEADER_INIT;
+use super::types::HEADER_INIT;
 use super::response::text_response;
 use super::{ProxyBody, BODY_LIMIT, SUPPORTED_VERSION};
 

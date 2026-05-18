@@ -1,6 +1,5 @@
 mod types;
 mod handlers;
-mod headers;
 mod requests;
 mod response;
 pub mod proxy;
