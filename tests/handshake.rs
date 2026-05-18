@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 use hamlet::config::MqttBrokerageConfig;
-use hamlet::services::local_gateway::handshake::build_brokerage_info;
+use hamlet::services::local_gateway::manager::build_brokerage_info;
 
 fn make_config(tls_enabled: bool) -> MqttBrokerageConfig {
     MqttBrokerageConfig {

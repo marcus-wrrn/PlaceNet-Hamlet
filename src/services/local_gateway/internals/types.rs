@@ -5,7 +5,8 @@ use tokio::net::TcpListener;
 use tokio::sync::{mpsc, oneshot};
 
 use crate::infra::ca::CaService;
-use crate::services::local_gateway::handshake::{MqttBrokerageInfo, TopicChannel};
+use crate::services::local_gateway::internals::handshake::MqttBrokerageInfo;
+use crate::services::local_gateway::manager::TopicChannel;
 use crate::services::mqtt_brokerage::MqttBrokerageHandle;
 
 pub const SUPPORTED_VERSION: &str = "0.0.1";

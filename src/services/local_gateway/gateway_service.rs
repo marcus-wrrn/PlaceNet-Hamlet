@@ -8,7 +8,8 @@ use crate::config::HttpConfig;
 use crate::infra::ca::CaService;
 use crate::services::mqtt_brokerage::MqttBrokerageHandle;
 use crate::supervisor::ManagedService;
-use super::handshake::{MqttBrokerageInfo, TopicChannel};
+use super::internals::handshake::MqttBrokerageInfo;
+use super::manager::TopicChannel;
 use super::internals::{AppState, BoundGateway};
 
 pub struct GatewayService {
@@ -64,7 +65,7 @@ impl ManagedService for GatewayService {
         self.shutdown_tx = Some(shutdown_tx);
 
         if self.config.tls_enabled {
-            let tls_config = super::tls::build_tls_config(&self.ca).await?;
+            let tls_config = super::internals::tls::build_tls_config(&self.ca).await?;
             let tls_acceptor = TlsAcceptor::from(tls_config);
             info!(
                 "HTTPS gateway bound on {} → upstream :{}",

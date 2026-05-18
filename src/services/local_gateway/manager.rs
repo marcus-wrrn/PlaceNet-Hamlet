@@ -1,13 +1,13 @@
 use tokio::sync::mpsc;
 use tracing::{error, info};
 
-use crate::config::HttpConfig;
+use crate::config::{HttpConfig, MqttBrokerageConfig};
 use crate::infra::ca::CaService;
 use crate::services::mqtt_brokerage::MqttBrokerageHandle;
 use crate::supervisor::{Supervisor, SupervisorHandle};
 use crate::services::ServiceId;
-use super::GatewayService;
-use super::handshake::{MqttBrokerageInfo, TopicChannel};
+use super::gateway_service::GatewayService;
+use super::internals::handshake::{MqttBrokerageInfo, MqttTopicConfig};
 
 /// Build and register the gateway service onto the supervisor.
 pub fn register_onto(
@@ -27,5 +27,28 @@ pub async fn start_gateway(supervisor_handle: &SupervisorHandle) {
     match supervisor_handle.start_service(ServiceId::Gateway).await {
         Ok(()) => info!("Gateway service started"),
         Err(e) => error!("Failed to start gateway service: {}", e),
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum TopicType {
+    Listen,
+    Broadcast,
+    Hybrid,
+}
+
+#[derive(Debug, Clone)]
+pub struct TopicChannel {
+    pub topic: MqttTopicConfig,
+    pub topic_type: TopicType,
+}
+
+pub fn build_brokerage_info(config: &MqttBrokerageConfig, ca_cert_pem: String) -> MqttBrokerageInfo {
+    let port = if config.tls_enabled { config.mqtts_port } else { config.port };
+    MqttBrokerageInfo {
+        address: "localhost".to_string(),
+        port,
+        //topics: vec![],
+        ca_cert_pem,
     }
 }

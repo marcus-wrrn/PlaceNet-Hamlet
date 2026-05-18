@@ -4,7 +4,7 @@ use http_body_util::{BodyExt, Full};
 use hyper::body::Bytes;
 use hyper::Response;
 
-use super::internals::ProxyBody;
+use super::types::ProxyBody;
 
 pub(super) fn text_response(status: u16, msg: &'static str) -> Response<ProxyBody> {
     let body = Full::new(Bytes::from(msg))

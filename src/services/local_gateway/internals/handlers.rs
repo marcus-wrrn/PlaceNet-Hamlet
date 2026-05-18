@@ -2,18 +2,19 @@ use hyper::body::Incoming;
 use hyper::{Request, Response};
 use tracing::{debug, error, info};
 
-use super::handshake::{MqttTopicConfig, TopicChannel, TopicType};
+use super::handshake::MqttTopicConfig;
+use super::super::manager::{TopicChannel, TopicType};
 use super::requests::{DeviceInitRequest, DeviceRegisterRequest};
 use super::response::{json_response, text_response};
-use super::internals::{AppState, ProxyBody};
+use super::types::{AppState, ProxyBody};
 
 /// `X-PlaceNet-Health` — health check: returns 200 OK.
-pub(super) async fn handle_health(_req: Request<Incoming>) -> Response<ProxyBody> {
+pub(in crate::services::local_gateway) async fn handle_health(_req: Request<Incoming>) -> Response<ProxyBody> {
     text_response(200, "OK")
 }
 
 /// `X-PlaceNet-Init: <version>` — device handshake: sign CSR, return cert + brokerage info.
-pub(super) async fn handle_device_init(state: &AppState, req: Request<Incoming>) -> Response<ProxyBody> {
+pub(in crate::services::local_gateway) async fn handle_device_init(state: &AppState, req: Request<Incoming>) -> Response<ProxyBody> {
     let request = match DeviceInitRequest::process_request(req).await {
         Ok(p) => p,
         Err(r) => return r,
@@ -93,7 +94,7 @@ pub(super) async fn handle_device_init(state: &AppState, req: Request<Incoming>)
 }
 
 /// `X-PlaceNet-Register: <version>` — client cert registration: sign CSR, return cert + CA cert.
-pub(super) async fn handle_client_register(state: &AppState, req: Request<Incoming>) -> Response<ProxyBody> {
+pub(in crate::services::local_gateway) async fn handle_client_register(state: &AppState, req: Request<Incoming>) -> Response<ProxyBody> {
     let request = match DeviceRegisterRequest::process_request(req).await {
         Ok(p) => p,
         Err(r) => return r,

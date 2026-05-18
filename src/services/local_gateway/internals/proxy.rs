@@ -13,10 +13,9 @@ use tracing::{error, info, warn};
 use super::handlers::{handle_client_register, handle_device_init, handle_health};
 use super::headers::{HEADER_HEALTH, HEADER_INIT, HEADER_REGISTER};
 use super::response::text_response;
-use super::internals::{AppState, BoxError, ProxyBody};
+use super::{AppState, BoxError, ProxyBody};
 
-/// Dispatch a request: handle PlaceNet protocol requests locally, proxy everything else upstream.
-pub(super) async fn dispatch(state: AppState, req: Request<Incoming>) -> Result<Response<ProxyBody>, Infallible> {
+pub async fn dispatch(state: AppState, req: Request<Incoming>) -> Result<Response<ProxyBody>, Infallible> {
     if req.headers().contains_key(HEADER_HEALTH) {
         return Ok(handle_health(req).await);
     }
@@ -36,7 +35,7 @@ pub(super) async fn dispatch(state: AppState, req: Request<Incoming>) -> Result<
     }
 }
 
-pub(super) async fn try_forward(upstream_port: u16, req: Request<Incoming>) -> Result<Response<ProxyBody>, BoxError> {
+pub async fn try_forward(upstream_port: u16, req: Request<Incoming>) -> Result<Response<ProxyBody>, BoxError> {
     let upstream = TcpStream::connect(("127.0.0.1", upstream_port)).await?;
     let io = TokioIo::new(upstream);
 
@@ -54,7 +53,7 @@ pub(super) async fn try_forward(upstream_port: u16, req: Request<Incoming>) -> R
     Ok(resp.map(|b| b.boxed()))
 }
 
-pub(super) async fn serve_connection(stream: TcpStream, state: AppState, peer_addr: SocketAddr) {
+pub async fn serve_connection(stream: TcpStream, state: AppState, peer_addr: SocketAddr) {
     let io = TokioIo::new(stream);
     let svc = hyper::service::service_fn(move |req| {
         let state = state.clone();
@@ -69,7 +68,7 @@ pub(super) async fn serve_connection(stream: TcpStream, state: AppState, peer_ad
     }
 }
 
-pub(super) async fn serve_tls_connection(
+pub async fn serve_tls_connection(
     stream: TcpStream,
     tls_acceptor: TlsAcceptor,
     state: AppState,
