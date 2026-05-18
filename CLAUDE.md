@@ -45,16 +45,20 @@ hamlet/
     │   │   ├── manager.rs       ← register_onto(), start_cloud_gateway()
     │   │   └── messages.rs      ← GatewayMessage enum (Register, Connect, ConnectRequest, Relay, Ack)
     │   ├── local_gateway/
-    │   │   ├── mod.rs           ← re-exports GatewayService; brings AppState, BoxError, ProxyBody, constants into scope
-    │   │   ├── gateway_service.rs ← GatewayService, AppState, ManagedService impl
+    │   │   ├── mod.rs           ← re-exports GatewayService
+    │   │   ├── gateway_service.rs ← GatewayService, ManagedService impl
     │   │   ├── manager.rs       ← register_onto(), start_gateway()
+    │   │   ├── tasks.rs         ← spawn_tls_accept_loop(), spawn_plain_accept_loop() — tokio task helpers
     │   │   ├── tls.rs           ← build_tls_config() — rustls ServerConfig from CaService
     │   │   ├── handshake.rs     ← DeviceInfo, MqttBrokerageInfo, EnrichedRegistrationMessage, build_brokerage_info()
     │   │   ├── handlers.rs      ← handle_device_init(), handle_client_register()
     │   │   ├── headers.rs       ← HEADER_INIT, HEADER_REGISTER — PlaceNet HTTP header name constants
     │   │   ├── proxy.rs         ← dispatch(), try_forward(), serve_connection(), serve_tls_connection()
     │   │   ├── requests.rs      ← DeviceInitRequest struct + process_request() — parses version, broker_host, device from Request
-    │   │   └── response.rs      ← text_response(), json_response() helpers
+    │   │   ├── response.rs      ← text_response(), json_response() helpers
+    │   │   └── internals/
+    │   │       ├── mod.rs       ← re-exports from types.rs
+    │   │       └── types.rs     ← AppState, BoundGateway, BoxError, ProxyBody, SUPPORTED_VERSION, BODY_LIMIT
     │   ├── mqtt_brokerage/
     │   │   ├── mod.rs           ← re-exports MosquittoBrokerageService, MqttBrokerageHandle, provision_broker_cert
     │   │   ├── mosquitto_brokerage_service.rs ← MosquittoBrokerageService, MqttBrokerageHandle (spawns mosquitto process)
@@ -168,7 +172,7 @@ cargo test
 Tests are integration-style (in `tests/`), using real SQLite in-memory or `tempfile` DBs. No mocking of the database layer.
 
 ### Modifying + Adding a Service
-Refer to the service skill when adding a new service or modifying an existing service.
+Refer to the service-management skill when adding a new service or modifying an existing service.
 
 ### Adding a new HTTP endpoint
 Add a handler in `src/services/local_gateway/handlers.rs` and dispatch it from `src/services/local_gateway/proxy.rs::dispatch()` by checking for the appropriate header or path.

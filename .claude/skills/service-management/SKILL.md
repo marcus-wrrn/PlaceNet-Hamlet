@@ -1,3 +1,7 @@
+---
+name: service-management
+description: Defines service architecture, guidelines and instructions for adding new services
+---
 # Services
 
 A service is a PlaceNet module operating on a separate thread or process from the main tasks operating in the `App` struct.

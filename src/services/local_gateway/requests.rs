@@ -6,7 +6,7 @@ use tracing::warn;
 use super::handshake::DeviceInfo;
 use super::headers::HEADER_INIT;
 use super::response::text_response;
-use super::{ProxyBody, BODY_LIMIT, SUPPORTED_VERSION};
+use super::internals::{ProxyBody, BODY_LIMIT, SUPPORTED_VERSION};
 
 pub(super) struct DeviceInitRequest {
     // TODO: use version checking in later iterations

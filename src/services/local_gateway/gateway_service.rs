@@ -1,33 +1,15 @@
 use async_trait::async_trait;
-use http_body_util::combinators::BoxBody;
-use hyper::body::Bytes;
-use std::net::SocketAddr;
 use tokio::net::TcpListener;
 use tokio::sync::{mpsc, oneshot};
 use tokio_rustls::TlsAcceptor;
-use tracing::{info, warn};
+use tracing::info;
 
 use crate::config::HttpConfig;
 use crate::infra::ca::CaService;
 use crate::services::mqtt_brokerage::MqttBrokerageHandle;
 use crate::supervisor::ManagedService;
 use super::handshake::{MqttBrokerageInfo, TopicChannel};
-
-pub(super) const SUPPORTED_VERSION: &str = "0.0.1";
-pub(super) const BODY_LIMIT: usize = 64 * 1024;
-
-pub(super) type BoxError = Box<dyn std::error::Error + Send + Sync>;
-pub(super) type ProxyBody = BoxBody<Bytes, hyper::Error>;
-
-#[derive(Clone)]
-pub(super) struct AppState {
-    pub(super) ca: CaService,
-    pub(super) brokerage_info: MqttBrokerageInfo,
-    pub(super) brokerage: Option<MqttBrokerageHandle>,
-    pub(super) upstream_port: u16,
-    /// Sends newly assigned beacon broadcast topics to the app for subscription and broadcasting.
-    pub(super) beacon_topic_tx: Option<mpsc::Sender<TopicChannel>>,
-}
+use super::internals::{AppState, BoundGateway};
 
 pub struct GatewayService {
     config: HttpConfig,
@@ -36,13 +18,6 @@ pub struct GatewayService {
     brokerage: Option<MqttBrokerageHandle>,
     beacon_topic_tx: Option<mpsc::Sender<TopicChannel>>,
     shutdown_tx: Option<oneshot::Sender<()>>,
-}
-
-pub(super) struct BoundGateway {
-    pub(super) state: AppState,
-    pub(super) listener: TcpListener,
-    pub(super) local_addr: SocketAddr,
-    pub(super) shutdown_rx: oneshot::Receiver<()>,
 }
 
 impl GatewayService {
@@ -84,45 +59,24 @@ impl ManagedService for GatewayService {
         if self.shutdown_tx.is_some() {
             return Err("GatewayService is already running".to_string());
         }
-        
-        let (mut gateway, shutdown_tx) = self.initialize().await?;
+
+        let (gateway, shutdown_tx) = self.initialize().await?;
         self.shutdown_tx = Some(shutdown_tx);
 
         if self.config.tls_enabled {
             let tls_config = super::tls::build_tls_config(&self.ca).await?;
             let tls_acceptor = TlsAcceptor::from(tls_config);
-
-            tokio::spawn(async move {
-                info!("HTTPS service listening on {} → upstream :{}", gateway.local_addr, gateway.state.upstream_port);
-
-                loop {
-                    let (tcp_stream, peer_addr) = tokio::select! {
-                        result = gateway.listener.accept() => match result {
-                            Ok(pair) => pair,
-                            Err(e) => { warn!("TCP accept error: {}", e); continue; }
-                        },
-                        _ = &mut gateway.shutdown_rx => { info!("HTTPS service shutting down"); break; }
-                    };
-
-                    tokio::spawn(super::proxy::serve_tls_connection(tcp_stream, tls_acceptor.clone(), gateway.state.clone(), peer_addr));
-                }
-            });
+            info!(
+                "HTTPS gateway bound on {} → upstream :{}",
+                gateway.local_addr, gateway.state.upstream_port
+            );
+            super::tasks::spawn_tls_accept_loop(gateway, tls_acceptor);
         } else {
-            tokio::spawn(async move {
-                info!("HTTP service listening on {} → upstream :{} (TLS disabled)", gateway.local_addr, gateway.state.upstream_port);
-
-                loop {
-                    let (tcp_stream, peer_addr) = tokio::select! {
-                        result = gateway.listener.accept() => match result {
-                            Ok(pair) => pair,
-                            Err(e) => { warn!("TCP accept error: {}", e); continue; }
-                        },
-                        _ = &mut gateway.shutdown_rx => { info!("HTTP service shutting down"); break; }
-                    };
-
-                    tokio::spawn(super::proxy::serve_connection(tcp_stream, gateway.state.clone(), peer_addr));
-                }
-            });
+            info!(
+                "HTTP gateway bound on {} → upstream :{} (TLS disabled)",
+                gateway.local_addr, gateway.state.upstream_port
+            );
+            super::tasks::spawn_plain_accept_loop(gateway);
         }
 
         Ok(0)

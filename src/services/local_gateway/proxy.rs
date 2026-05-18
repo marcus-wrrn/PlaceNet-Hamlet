@@ -13,7 +13,7 @@ use tracing::{error, info, warn};
 use super::handlers::{handle_client_register, handle_device_init, handle_health};
 use super::headers::{HEADER_HEALTH, HEADER_INIT, HEADER_REGISTER};
 use super::response::text_response;
-use super::{AppState, BoxError, ProxyBody};
+use super::internals::{AppState, BoxError, ProxyBody};
 
 /// Dispatch a request: handle PlaceNet protocol requests locally, proxy everything else upstream.
 pub(super) async fn dispatch(state: AppState, req: Request<Incoming>) -> Result<Response<ProxyBody>, Infallible> {

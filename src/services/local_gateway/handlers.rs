@@ -5,7 +5,7 @@ use tracing::{debug, error, info};
 use super::handshake::{MqttTopicConfig, TopicChannel, TopicType};
 use super::requests::{DeviceInitRequest, DeviceRegisterRequest};
 use super::response::{json_response, text_response};
-use super::{AppState, ProxyBody};
+use super::internals::{AppState, ProxyBody};
 
 /// `X-PlaceNet-Health` — health check: returns 200 OK.
 pub(super) async fn handle_health(_req: Request<Incoming>) -> Response<ProxyBody> {
