@@ -1,6 +1,5 @@
 use serde::{Deserialize, Serialize};
 use crate::config::MqttBrokerageConfig;
-use rumqttc::QoS;
 
 /// mDNS settings advertised by the device.
 #[derive(Debug, Deserialize)]
