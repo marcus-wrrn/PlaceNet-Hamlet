@@ -8,9 +8,8 @@ use crate::config::HttpConfig;
 use crate::infra::ca::CaService;
 use crate::services::mqtt_brokerage::MqttBrokerageHandle;
 use crate::supervisor::ManagedService;
-use super::internals::handshake::MqttBrokerageInfo;
 use super::manager::TopicChannel;
-use super::internals::{AppState, BoundGateway};
+use super::internals::{AppState, BoundGateway, MqttBrokerageInfo};
 
 pub struct GatewayService {
     config: HttpConfig,

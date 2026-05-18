@@ -7,7 +7,7 @@ use crate::services::mqtt_brokerage::MqttBrokerageHandle;
 use crate::supervisor::{Supervisor, SupervisorHandle};
 use crate::services::ServiceId;
 use super::gateway_service::GatewayService;
-use super::internals::handshake::{MqttBrokerageInfo, MqttTopicConfig};
+use super::internals::{MqttBrokerageInfo, MqttTopicConfig};
 
 /// Build and register the gateway service onto the supervisor.
 pub fn register_onto(

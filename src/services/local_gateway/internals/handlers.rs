@@ -2,7 +2,7 @@ use hyper::body::Incoming;
 use hyper::{Request, Response};
 use tracing::{debug, error, info};
 
-use super::handshake::MqttTopicConfig;
+use super::types::MqttTopicConfig;
 use super::super::manager::{TopicChannel, TopicType};
 use super::requests::{DeviceInitRequest, DeviceRegisterRequest};
 use super::response::{json_response, text_response};
