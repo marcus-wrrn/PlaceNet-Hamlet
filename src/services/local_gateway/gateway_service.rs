@@ -10,6 +10,8 @@ use crate::services::mqtt_brokerage::MqttBrokerageHandle;
 use crate::supervisor::ManagedService;
 use super::manager::TopicChannel;
 use super::internals::{AppState, BoundGateway, MqttBrokerageInfo};
+use super::tasks;
+use super::internals;
 
 pub struct GatewayService {
     config: HttpConfig,
@@ -63,20 +65,21 @@ impl ManagedService for GatewayService {
         let (gateway, shutdown_tx) = self.initialize().await?;
         self.shutdown_tx = Some(shutdown_tx);
 
+        // TODO: Eventually this will need to support a wider array of Protocols
         if self.config.tls_enabled {
-            let tls_config = super::internals::tls::build_tls_config(&self.ca).await?;
+            let tls_config = internals::tls::build_tls_config(&self.ca).await?;
             let tls_acceptor = TlsAcceptor::from(tls_config);
             info!(
                 "HTTPS gateway bound on {} → upstream :{}",
                 gateway.local_addr, gateway.state.upstream_port
             );
-            super::tasks::spawn_tls_accept_loop(gateway, tls_acceptor);
+            tasks::spawn_tls_accept_loop(gateway, tls_acceptor);
         } else {
             info!(
                 "HTTP gateway bound on {} → upstream :{} (TLS disabled)",
                 gateway.local_addr, gateway.state.upstream_port
             );
-            super::tasks::spawn_plain_accept_loop(gateway);
+            tasks::spawn_plain_accept_loop(gateway);
         }
 
         Ok(0)

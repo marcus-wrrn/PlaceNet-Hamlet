@@ -6,7 +6,7 @@ use tracing::warn;
 use super::types::DeviceInfo;
 use super::types::HEADER_INIT;
 use super::response::text_response;
-use super::{ProxyBody, BODY_LIMIT, SUPPORTED_VERSION};
+use super::{ProxyBody, PROXY_BODY_LIMIT, SUPPORTED_VERSION};
 
 pub(super) struct DeviceInitRequest {
     // TODO: use version checking in later iterations
@@ -40,7 +40,7 @@ impl DeviceInitRequest {
             })
             .unwrap_or_else(|| "localhost".to_string());
 
-        let body_bytes = match Limited::new(req.into_body(), BODY_LIMIT).collect().await {
+        let body_bytes = match Limited::new(req.into_body(), PROXY_BODY_LIMIT).collect().await {
             Ok(b) => b.to_bytes(),
             Err(e) => {
                 warn!("Failed to read device init body: {}", e);
@@ -66,7 +66,7 @@ pub(super) struct DeviceRegisterRequest {
 
 impl DeviceRegisterRequest {
     pub(super) async fn process_request(req: Request<Incoming>) -> Result<Self, Response<ProxyBody>> {
-        let body_bytes = match Limited::new(req.into_body(), BODY_LIMIT).collect().await {
+        let body_bytes = match Limited::new(req.into_body(), PROXY_BODY_LIMIT).collect().await {
             Ok(b) => b.to_bytes(),
             Err(e) => {
                 warn!("Failed to read client register body: {}", e);

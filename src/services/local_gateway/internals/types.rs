@@ -9,6 +9,8 @@ use crate::infra::ca::CaService;
 use crate::services::local_gateway::manager::TopicChannel;
 use crate::services::mqtt_brokerage::MqttBrokerageHandle;
 
+// PlaceNet headers (signifies that it should be used by the Hamlet and not proxied)
+
 pub const SUPPORTED_VERSION: &str = "0.0.1";
 
 /// Device handshake: sign CSR, return cert + brokerage info.
@@ -19,6 +21,8 @@ pub(super) const HEADER_REGISTER: &str = "x-placenet-register";
 
 /// Health check: returns 200 OK.
 pub(super) const HEADER_HEALTH: &str = "x-placenet-health";
+
+
 
 /// mDNS settings advertised by the device.
 #[derive(Debug, Deserialize)]
@@ -51,7 +55,7 @@ pub struct MqttBrokerageInfo {
     /// TLS certificate and to present its own CA-signed client certificate.
     pub ca_cert_pem: String,
 }
-pub const BODY_LIMIT: usize = 64 * 1024;
+pub const PROXY_BODY_LIMIT: usize = 64 * 1024;
 
 pub type BoxError = Box<dyn std::error::Error + Send + Sync>;
 pub type ProxyBody = BoxBody<Bytes, hyper::Error>;
