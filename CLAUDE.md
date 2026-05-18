@@ -167,11 +167,8 @@ cargo test
 
 Tests are integration-style (in `tests/`), using real SQLite in-memory or `tempfile` DBs. No mocking of the database layer.
 
-### Adding a new service
-1. Create `src/services/<name>/mod.rs` (service struct + `ManagedService` impl) and `src/services/<name>/manager.rs` (registration functions).
-2. Add a variant to `ServiceId` in `src/services/mod.rs`.
-3. Register and start the service in `main.rs`.
-4. Update the directory tree in this file.
+### Modifying + Adding a Service
+Refer to the service skill when adding a new service or modifying an existing service.
 
 ### Adding a new HTTP endpoint
 Add a handler in `src/services/local_gateway/handlers.rs` and dispatch it from `src/services/local_gateway/proxy.rs::dispatch()` by checking for the appropriate header or path.

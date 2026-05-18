@@ -10,7 +10,7 @@ use rumqttc::QoS;
 use crate::services::mqtt_client::provision_node_identity;
 use crate::infra::ca::CaService;
 use crate::services::local_gateway::manager::{register_onto as register_gateway, start_gateway};
-use crate::services::local_gateway::handshake::build_brokerage_info;
+use crate::services::local_gateway::handshake::{build_brokerage_info, TopicChannel, TopicType};
 use crate::services::cloud_gateway::manager::{register_onto as register_cloud_gateway, start_cloud_gateway};
 use crate::services::cloud_gateway::{connect_to_gateway, messages::GatewayMessage};
 use crate::services;
@@ -23,7 +23,7 @@ pub struct App {
     mqtt_handle: MqttClientHandle,
     server_url: String,
     own_gateway_url: Option<String>,
-    beacon_topic_rx: mpsc::Receiver<String>,
+    beacon_topic_rx: mpsc::Receiver<TopicChannel>,
     broadcast_topics: Arc<RwLock<Vec<String>>>,
 }
 
@@ -37,10 +37,11 @@ pub struct BroadcastState {
 impl BroadcastState {
     /// Periodically publishes this node's `server_url` to all registered beacon topics.
     ///
-    /// Fires every 300 seconds. Iterates over `broadcast_topics` and publishes a JSON payload
+    /// Fires every 30 seconds. Iterates over `broadcast_topics` and publishes a JSON payload
     /// `{"server_url": "..."}` to each topic at QoS 1. Runs until the task is cancelled.
+    /// TODO: Add rotating encryption keys
     pub async fn run_broadcast_loop(self) {
-        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(300));
+        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(30));
         loop {
             interval.tick().await;
             let payload = serde_json::json!({ "server_url": self.server_url });
@@ -104,7 +105,7 @@ impl App {
             register_mqtt_broker(&mut supervisor, &capabilities, Arc::clone(&mqtt_broker_config)).await;
 
         // ── Register gateway service ─────────────────────────────────────
-        let (beacon_topic_tx, beacon_topic_rx) = mpsc::channel::<String>(64);
+        let (beacon_topic_tx, beacon_topic_rx) = mpsc::channel::<TopicChannel>(64);
         register_gateway(&mut supervisor, config.http, brokerage_info, brokerage_handle, ca_service.clone(), Some(beacon_topic_tx));
 
         // ── Provision node identity for MQTT mutual TLS ──────────────────
@@ -184,12 +185,39 @@ impl App {
 
         loop {
             let msg = tokio::select! {
-                Some(topic) = self.beacon_topic_rx.recv() => {
-                    if let Err(e) = self.mqtt_handle.subscribe(&topic, QoS::AtLeastOnce).await {
-                        tracing::error!(topic, "Failed to subscribe to beacon broadcast topic: {}", e);
-                    } else {
-                        info!(topic, "Subscribed to beacon broadcast topic");
-                        self.broadcast_topics.write().await.push(topic);
+                // If beacon has registered a new topic channel
+                Some(channel) = self.beacon_topic_rx.recv() => {
+                    let topic = channel.topic.topic.clone();
+                    match channel.topic_type {
+                        TopicType::Listen => {
+                            let qos = match channel.topic.qos {
+                                0 => QoS::AtMostOnce,
+                                2 => QoS::ExactlyOnce,
+                                _ => QoS::AtLeastOnce,
+                            };
+                            if let Err(e) = self.mqtt_handle.subscribe(&topic, qos).await {
+                                tracing::error!(topic, "Failed to subscribe to beacon listen topic: {}", e);
+                            } else {
+                                info!(topic, "Subscribed to beacon listen topic");
+                            }
+                        }
+                        TopicType::Broadcast => {
+                            self.broadcast_topics.write().await.push(topic.clone());
+                            info!(topic, "Registered beacon broadcast topic");
+                        }
+                        TopicType::Hybrid => {
+                            let qos = match channel.topic.qos {
+                                0 => QoS::AtMostOnce,
+                                2 => QoS::ExactlyOnce,
+                                _ => QoS::AtLeastOnce,
+                            };
+                            if let Err(e) = self.mqtt_handle.subscribe(&topic, qos).await {
+                                tracing::error!(topic, "Failed to subscribe to beacon hybrid topic: {}", e);
+                            } else {
+                                info!(topic, "Subscribed to beacon hybrid topic");
+                                self.broadcast_topics.write().await.push(topic.clone());
+                            }
+                        }
                     }
                     continue;
                 }

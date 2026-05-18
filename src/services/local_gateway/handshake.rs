@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use crate::config::MqttBrokerageConfig;
+use rumqttc::QoS;
 
 /// mDNS settings advertised by the device.
 #[derive(Debug, Deserialize)]
@@ -23,12 +24,25 @@ pub struct MqttTopicConfig {
     pub qos: u8,
 }
 
+#[derive(Debug, Clone)]
+pub enum TopicType {
+    Listen,
+    Broadcast,
+    Hybrid,
+}
+
+#[derive(Debug, Clone)]
+pub struct TopicChannel {
+    pub topic: MqttTopicConfig,
+    pub topic_type: TopicType,
+}
+
 /// Broker connection details returned to a device after a successful handshake.
 #[derive(Debug, Clone, Serialize)]
 pub struct MqttBrokerageInfo {
     pub address: String,
     pub port: u16,
-    pub topics: Vec<MqttTopicConfig>,
+    //pub topics: Vec<MqttTopicConfig>,
     /// PEM-encoded CA certificate. The device must trust this to verify the broker's
     /// TLS certificate and to present its own CA-signed client certificate.
     pub ca_cert_pem: String,
@@ -53,7 +67,7 @@ pub fn build_brokerage_info(config: &MqttBrokerageConfig, ca_cert_pem: String) -
     MqttBrokerageInfo {
         address: "localhost".to_string(),
         port,
-        topics: vec![],
+        //topics: vec![],
         ca_cert_pem,
     }
 }

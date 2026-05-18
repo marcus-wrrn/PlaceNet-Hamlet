@@ -11,7 +11,7 @@ use crate::config::HttpConfig;
 use crate::infra::ca::CaService;
 use crate::services::mqtt_brokerage::MqttBrokerageHandle;
 use crate::supervisor::ManagedService;
-use super::handshake::MqttBrokerageInfo;
+use super::handshake::{MqttBrokerageInfo, TopicChannel};
 
 pub(super) const SUPPORTED_VERSION: &str = "0.0.1";
 pub(super) const BODY_LIMIT: usize = 64 * 1024;
@@ -26,7 +26,7 @@ pub(super) struct AppState {
     pub(super) brokerage: Option<MqttBrokerageHandle>,
     pub(super) upstream_port: u16,
     /// Sends newly assigned beacon broadcast topics to the app for subscription and broadcasting.
-    pub(super) beacon_topic_tx: Option<mpsc::Sender<String>>,
+    pub(super) beacon_topic_tx: Option<mpsc::Sender<TopicChannel>>,
 }
 
 pub struct GatewayService {
@@ -34,7 +34,7 @@ pub struct GatewayService {
     ca: CaService,
     brokerage_info: MqttBrokerageInfo,
     brokerage: Option<MqttBrokerageHandle>,
-    beacon_topic_tx: Option<mpsc::Sender<String>>,
+    beacon_topic_tx: Option<mpsc::Sender<TopicChannel>>,
     shutdown_tx: Option<oneshot::Sender<()>>,
 }
 
@@ -51,7 +51,7 @@ impl GatewayService {
         ca: CaService,
         brokerage_info: MqttBrokerageInfo,
         brokerage: Option<MqttBrokerageHandle>,
-        beacon_topic_tx: Option<mpsc::Sender<String>>,
+        beacon_topic_tx: Option<mpsc::Sender<TopicChannel>>,
     ) -> Self {
         Self { config, ca, brokerage_info, brokerage, beacon_topic_tx, shutdown_tx: None }
     }

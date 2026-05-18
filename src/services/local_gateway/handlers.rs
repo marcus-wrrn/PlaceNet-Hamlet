@@ -2,6 +2,7 @@ use hyper::body::Incoming;
 use hyper::{Request, Response};
 use tracing::{debug, error, info};
 
+use super::handshake::{MqttTopicConfig, TopicChannel, TopicType};
 use super::requests::{DeviceInitRequest, DeviceRegisterRequest};
 use super::response::{json_response, text_response};
 use super::{AppState, ProxyBody};
@@ -49,10 +50,22 @@ pub(super) async fn handle_device_init(state: &AppState, req: Request<Incoming>)
     }
 
     let beacon_id = uuid::Uuid::new_v4().to_string();
-    let broadcast_topic = format!("{}/broadcast", beacon_id);
+    let broadcast_topic = format!("{}/cast", beacon_id);
+    let receive_topic = format!("{}/rec", beacon_id);
 
     if let Some(tx) = &state.beacon_topic_tx {
-        if let Err(e) = tx.try_send(broadcast_topic.clone()) {
+        let listen_channel = TopicChannel {
+            topic: MqttTopicConfig { topic: receive_topic.clone(), qos: 1 },
+            topic_type: TopicType::Listen,
+        };
+        let broadcast_channel = TopicChannel {
+            topic: MqttTopicConfig { topic: broadcast_topic.clone(), qos: 1 },
+            topic_type: TopicType::Broadcast,
+        };
+        if let Err(e) = tx.try_send(listen_channel) {
+            tracing::warn!(beacon_id, "Failed to register beacon listen topic: {}", e);
+        }
+        if let Err(e) = tx.try_send(broadcast_channel) {
             tracing::warn!(beacon_id, "Failed to register beacon broadcast topic: {}", e);
         }
     }
@@ -64,12 +77,12 @@ pub(super) async fn handle_device_init(state: &AppState, req: Request<Incoming>)
         "cert_pem": cert_pem,
         "brokerage": brokerage,
         "beacon_id": beacon_id,
-        "broadcast_topic": broadcast_topic,
     });
     debug!(
         mdns_hostname = %device.mdns.hostname,
         beacon_id,
         broadcast_topic,
+        receive_topic,
         broker_address = %brokerage.address,
         broker_port = brokerage.port,
         cert_pem = %cert_pem,
