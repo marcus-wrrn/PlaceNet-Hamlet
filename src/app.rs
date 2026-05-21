@@ -15,17 +15,6 @@ use crate::services::cloud_gateway::{connect_to_gateway, messages::GatewayMessag
 use crate::services;
 use crate::supervisor::{Supervisor, SupervisorHandle};
 
-pub struct App {
-    /// Kept alive to drive the supervisor task until shutdown.
-    _supervisor_handle: SupervisorHandle,
-    inbound_rx: MqttMessageReceiver,
-    mqtt_handle: MqttClientHandle,
-    server_url: String,
-    own_gateway_url: Option<String>,
-    beacon_topic_rx: mpsc::Receiver<TopicChannel>,
-    broadcast_topics: Arc<RwLock<Vec<String>>>,
-}
-
 /// Cloneable subset of App state used by the broadcast loop.
 pub struct BroadcastState {
     server_url: String,
@@ -38,19 +27,19 @@ impl BroadcastState {
     ///
     /// Fires every 30 seconds. Iterates over `broadcast_topics` and publishes a JSON payload
     /// `{"server_url": "..."}` to each topic at QoS 1. Runs until the task is cancelled.
-    /// TODO: Add rotating encryption keys
+    /// TODO: Add rotating encryption keys + dynamic broadcast intervals
     pub async fn run_broadcast_loop(self) {
         let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(30));
         loop {
             interval.tick().await;
+            // TODO: Expand upon payload content
             let payload = serde_json::json!({ "server_url": self.server_url });
             let payload_str = payload.to_string();
 
             let topics = self.broadcast_topics.read().await;
             for topic in topics.iter() {
                 if let Err(e) = self
-                    .mqtt_handle
-                    .publish(topic, QoS::AtLeastOnce, payload_str.clone())
+                    .mqtt_handle.publish(topic, QoS::AtLeastOnce, payload_str.clone())
                     .await
                 {
                     tracing::error!(topic, "Failed to publish beacon broadcast: {}", e);
@@ -60,6 +49,19 @@ impl BroadcastState {
             }
         }
     }
+}
+
+pub struct App {
+    /// Kept alive to drive the supervisor task until shutdown.
+    _supervisor_handle: SupervisorHandle,
+    /// Sends beacon messages from brokerage to service 
+    beacon_inbound_rx: MqttMessageReceiver,
+    mqtt_handle: MqttClientHandle,
+    server_url: String,
+    own_gateway_url: Option<String>,
+    /// Used to subscribe to new topics during beacon handshake
+    beacon_topic_rx: mpsc::Receiver<TopicChannel>,
+    broadcast_topics: Arc<RwLock<Vec<String>>>,
 }
 
 impl App {
@@ -154,7 +156,7 @@ impl App {
         let broadcast_topics: Arc<RwLock<Vec<String>>> = Arc::new(RwLock::new(Vec::new()));
         Self {
             _supervisor_handle: supervisor_handle,
-            inbound_rx,
+            beacon_inbound_rx: inbound_rx,
             mqtt_handle,
             server_url: config.gateway_registration.server_url,
             own_gateway_url: config.gateway_registration.gateway_url,
@@ -171,6 +173,7 @@ impl App {
         }
     }
 
+    /// Processes incoming beacon requests 
     pub async fn run_beacon_message_loop(mut self) {
         // Seed the known-gateways set with this server's own configured gateway so
         // beacons advertising the same gateway don't trigger a redundant connection.
@@ -220,7 +223,7 @@ impl App {
                     }
                     continue;
                 }
-                msg = self.inbound_rx.recv() => match msg {
+                msg = self.beacon_inbound_rx.recv() => match msg {
                     Some(m) => m,
                     None => break,
                 }
