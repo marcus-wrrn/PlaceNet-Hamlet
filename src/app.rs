@@ -200,7 +200,7 @@ impl App {
                             if let Err(e) = self.mqtt_handle.subscribe(&topic, qos).await {
                                 tracing::error!(topic, "Failed to subscribe to beacon listen topic: {}", e);
                             } else {
-                                info!(topic, "Subscribed to beacon listen topic");
+                                info!(topic, "Subscribed to beacon listen topic?");
                             }
                         }
                         TopicType::Broadcast => {
