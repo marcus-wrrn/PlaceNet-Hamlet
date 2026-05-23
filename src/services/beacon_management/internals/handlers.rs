@@ -9,12 +9,12 @@ use super::response::{json_response, text_response};
 use super::types::{AppState, ProxyBody};
 
 /// `X-PlaceNet-Health` — health check: returns 200 OK.
-pub(in crate::services::local_gateway) async fn handle_health(_req: Request<Incoming>) -> Response<ProxyBody> {
+pub(in crate::services::beacon_management) async fn handle_health(_req: Request<Incoming>) -> Response<ProxyBody> {
     text_response(200, "OK")
 }
 
 /// `X-PlaceNet-Init: <version>` — device handshake: sign CSR, return cert + brokerage info.
-pub(in crate::services::local_gateway) async fn handle_device_init(state: &AppState, req: Request<Incoming>) -> Response<ProxyBody> {
+pub(in crate::services::beacon_management) async fn handle_device_init(state: &AppState, req: Request<Incoming>) -> Response<ProxyBody> {
     let request = match DeviceInitRequest::process_request(req).await {
         Ok(p) => p,
         Err(r) => return r,
@@ -96,7 +96,7 @@ pub(in crate::services::local_gateway) async fn handle_device_init(state: &AppSt
 }
 
 /// `X-PlaceNet-Register: <version>` — client cert registration: sign CSR, return cert + CA cert.
-pub(in crate::services::local_gateway) async fn handle_client_register(state: &AppState, req: Request<Incoming>) -> Response<ProxyBody> {
+pub(in crate::services::beacon_management) async fn handle_client_register(state: &AppState, req: Request<Incoming>) -> Response<ProxyBody> {
     let request = match DeviceRegisterRequest::process_request(req).await {
         Ok(p) => p,
         Err(r) => return r,

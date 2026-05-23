@@ -6,7 +6,7 @@ use tokio::net::TcpListener;
 use tokio::sync::{mpsc, oneshot};
 
 use crate::infra::ca::CaService;
-use crate::services::local_gateway::manager::TopicChannel;
+use crate::services::beacon_management::manager::TopicChannel;
 use crate::services::mqtt_brokerage::MqttBrokerageHandle;
 
 // PlaceNet headers (signifies that it should be used by the Hamlet and not proxied)

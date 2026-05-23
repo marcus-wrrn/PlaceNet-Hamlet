@@ -9,8 +9,8 @@ use crate::services::mqtt_client::{self, MqttClientHandle, MqttMessageReceiver};
 use rumqttc::QoS;
 use crate::services::mqtt_client::provision_node_identity;
 use crate::infra::ca::CaService;
-use crate::services::local_gateway::manager::{register_onto as register_gateway, start_gateway, build_brokerage_info, TopicChannel};
-use crate::services::local_gateway::BeaconRegistry;
+use crate::services::beacon_management::manager::{register_onto as register_gateway, start_gateway, build_brokerage_info, TopicChannel};
+use crate::services::beacon_management::BeaconRegistry;
 use crate::services::cloud_gateway::manager::{register_onto as register_cloud_gateway, start_cloud_gateway};
 use crate::services::cloud_gateway::{connect_to_gateway, messages::GatewayMessage};
 use crate::services;
@@ -34,7 +34,7 @@ impl BroadcastState {
         loop {
             interval.tick().await;
             // TODO: Expand upon payload content
-            let payload = serde_json::json!({ "server_url": self.server_url });
+            let payload = serde_json::json!({ "server_url": self.server_url, "beaconId": "random_string" });
             let payload_str = payload.to_string();
 
             let topics = self.broadcast_topics.read().await;

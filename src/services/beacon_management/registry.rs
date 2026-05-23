@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 use rumqttc::QoS;
 use tokio::sync::{oneshot, RwLock};
 
-use crate::services::local_gateway::manager::{TopicChannel, TopicType};
+use crate::services::beacon_management::manager::{TopicChannel, TopicType};
 use crate::services::mqtt_client::MqttClientHandle;
 
 /// A beacon is considered stale and deregistered after this period of silence.
