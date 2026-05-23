@@ -56,10 +56,12 @@ pub(in crate::services::local_gateway) async fn handle_device_init(state: &AppSt
 
     if let Some(tx) = &state.beacon_topic_tx {
         let listen_channel = TopicChannel {
+            beacon_id: beacon_id.clone(),
             topic: MqttTopicConfig { topic: receive_topic.clone(), qos: 1 },
             topic_type: TopicType::Listen,
         };
         let broadcast_channel = TopicChannel {
+            beacon_id: beacon_id.clone(),
             topic: MqttTopicConfig { topic: broadcast_topic.clone(), qos: 1 },
             topic_type: TopicType::Broadcast,
         };

@@ -1,5 +1,7 @@
+use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::{mpsc, RwLock};
+use std::time::{Duration, Instant};
+use tokio::sync::{mpsc, oneshot, RwLock};
 use tracing::info;
 use crate::config::Config;
 use crate::services::mqtt_brokerage::manager::{register_onto as register_mqtt_broker, start_mosquitto_brokerage};
@@ -14,6 +16,24 @@ use crate::services::cloud_gateway::manager::{register_onto as register_cloud_ga
 use crate::services::cloud_gateway::{connect_to_gateway, messages::GatewayMessage};
 use crate::services;
 use crate::supervisor::{Supervisor, SupervisorHandle};
+
+/// A beacon is considered stale and deregistered after this period of silence.
+const BEACON_TIMEOUT: Duration = Duration::from_secs(120);
+
+/// How often to scan for timed-out beacons.
+const BEACON_TIMEOUT_CHECK_INTERVAL: Duration = Duration::from_secs(30);
+
+/// Runtime state tracked per registered beacon.
+struct BeaconRecord {
+    listen_topic: String,
+    broadcast_topic: String,
+    last_seen: Instant,
+    gateway_url: Option<String>,
+    /// Keeping the handle alive allows future outbound sends to this gateway.
+    _gateway_handle: Option<crate::services::cloud_gateway::CloudGatewayHandle>,
+    /// Dropping this signals the WebSocket task to close.
+    gateway_shutdown_tx: Option<oneshot::Sender<()>>,
+}
 
 /// Cloneable subset of App state used by the broadcast loop.
 pub struct BroadcastState {
@@ -173,7 +193,7 @@ impl App {
         }
     }
 
-    /// Processes incoming beacon requests 
+    /// Processes incoming beacon requests
     pub async fn run_beacon_message_loop(mut self) {
         // Seed the known-gateways set with this server's own configured gateway so
         // beacons advertising the same gateway don't trigger a redundant connection.
@@ -182,14 +202,27 @@ impl App {
             known_gateways.insert(url.clone());
         }
 
-        // Keep (handle, shutdown_tx) pairs alive so dynamic connections persist.
-        let mut dynamic_connections = Vec::new();
+        // Beacon Management
+        let mut beacon_registry: HashMap<String, BeaconRecord> = HashMap::new();
+        let mut timeout_tick = tokio::time::interval(BEACON_TIMEOUT_CHECK_INTERVAL);
+        timeout_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
 
         loop {
             let msg = tokio::select! {
-                // If beacon has registered a new topic channel
+                // ── New topic channel from a completed device handshake ──────
                 Some(channel) = self.beacon_topic_rx.recv() => {
                     let topic = channel.topic.topic.clone();
+                    let entry = beacon_registry
+                        .entry(channel.beacon_id.clone())
+                        .or_insert_with(|| BeaconRecord {
+                            listen_topic: String::new(),
+                            broadcast_topic: String::new(),
+                            last_seen: Instant::now(),
+                            gateway_url: None,
+                            _gateway_handle: None,
+                            gateway_shutdown_tx: None,
+                        });
+
                     match channel.topic_type {
                         TopicType::Listen => {
                             let qos = match channel.topic.qos {
@@ -200,12 +233,14 @@ impl App {
                             if let Err(e) = self.mqtt_handle.subscribe(&topic, qos).await {
                                 tracing::error!(topic, "Failed to subscribe to beacon listen topic: {}", e);
                             } else {
-                                info!(topic, "Subscribed to beacon listen topic?");
+                                info!(beacon_id = %channel.beacon_id, topic, "Subscribed to beacon listen topic");
+                                entry.listen_topic = topic;
                             }
                         }
                         TopicType::Broadcast => {
                             self.broadcast_topics.write().await.push(topic.clone());
-                            info!(topic, "Registered beacon broadcast topic");
+                            info!(beacon_id = %channel.beacon_id, topic, "Registered beacon broadcast topic");
+                            entry.broadcast_topic = topic;
                         }
                         TopicType::Hybrid => {
                             let qos = match channel.topic.qos {
@@ -216,19 +251,75 @@ impl App {
                             if let Err(e) = self.mqtt_handle.subscribe(&topic, qos).await {
                                 tracing::error!(topic, "Failed to subscribe to beacon hybrid topic: {}", e);
                             } else {
-                                info!(topic, "Subscribed to beacon hybrid topic");
+                                info!(beacon_id = %channel.beacon_id, topic, "Subscribed to beacon hybrid topic");
                                 self.broadcast_topics.write().await.push(topic.clone());
+                                entry.listen_topic = topic.clone();
+                                entry.broadcast_topic = topic;
                             }
                         }
                     }
                     continue;
                 }
+
+                // ── Periodic stale-beacon sweep ──────────────────────────────
+                _ = timeout_tick.tick() => {
+                    let now = Instant::now();
+                    let stale: Vec<String> = beacon_registry
+                        .iter()
+                        .filter(|(_, r)| now.duration_since(r.last_seen) > BEACON_TIMEOUT)
+                        .map(|(id, _)| id.clone())
+                        .collect();
+
+                    for beacon_id in stale {
+                        if let Some(record) = beacon_registry.remove(&beacon_id) {
+                            tracing::warn!(beacon_id, "Beacon timed out — deregistering");
+
+                            // Unsubscribe from the listen topic.
+                            if !record.listen_topic.is_empty() {
+                                if let Err(e) = self.mqtt_handle.unsubscribe(&record.listen_topic).await {
+                                    tracing::error!(
+                                        topic = %record.listen_topic,
+                                        "Failed to unsubscribe timed-out beacon listen topic: {}",
+                                        e
+                                    );
+                                }
+                            }
+
+                            // Remove from broadcast list.
+                            if !record.broadcast_topic.is_empty() {
+                                self.broadcast_topics.write().await
+                                    .retain(|t| t != &record.broadcast_topic);
+                            }
+
+                            // Evict from known_gateways so a future beacon can
+                            // reconnect via the same gateway URL.
+                            if let Some(ref gw_url) = record.gateway_url {
+                                known_gateways.remove(gw_url);
+                            }
+
+                            // Dropping gateway_shutdown_tx signals the WebSocket
+                            // task to close; dropping _gateway_handle releases the
+                            // outbound channel.
+                        }
+                    }
+                    continue;
+                }
+
+                // ── Inbound MQTT message from a beacon ───────────────────────
                 msg = self.beacon_inbound_rx.recv() => match msg {
                     Some(m) => m,
                     None => break,
                 }
             };
             info!(topic = %msg.topic, "Received MQTT message");
+
+            // Refresh last_seen for the beacon that sent this message.
+            // Topics follow the pattern "{beacon_id}/rec".
+            if let Some(beacon_id) = msg.topic.strip_suffix("/rec") {
+                if let Some(record) = beacon_registry.get_mut(beacon_id) {
+                    record.last_seen = Instant::now();
+                }
+            }
 
             // Parse the raw beacon payload, falling back to a string value if it
             // isn't valid JSON.
@@ -263,7 +354,17 @@ impl App {
                     if let Err(e) = handle.send(registration).await {
                         tracing::error!(gateway = %gw_url, "Failed to queue beacon payload: {}", e);
                     }
-                    dynamic_connections.push((handle, shutdown_tx));
+
+                    // Associate the connection with the beacon that triggered it
+                    // so timeout cleanup can tear it down.
+                    let beacon_id = msg.topic.strip_suffix("/rec").map(str::to_owned);
+                    if let Some(bid) = beacon_id {
+                        if let Some(record) = beacon_registry.get_mut(&bid) {
+                            record.gateway_url = Some(gw_url);
+                            record._gateway_handle = Some(handle);
+                            record.gateway_shutdown_tx = Some(shutdown_tx);
+                        }
+                    }
                 }
             }
         }

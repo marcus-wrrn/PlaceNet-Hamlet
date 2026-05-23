@@ -39,6 +39,7 @@ pub enum TopicType {
 
 #[derive(Debug, Clone)]
 pub struct TopicChannel {
+    pub beacon_id: String,
     pub topic: MqttTopicConfig,
     pub topic_type: TopicType,
 }
