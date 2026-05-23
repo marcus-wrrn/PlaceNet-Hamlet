@@ -27,7 +27,7 @@ done
 [[ -z "$SERVER" ]]       && { echo "Error: --server is required"; usage; }
 [[ -z "$DEPLOY_PATH" ]]  && { echo "Error: --path is required"; usage; }
 
-BINARY_NAME="placenet-home"
+BINARY_NAME="hamlet"
 BINARY_PATH="target/${BUILD_TARGET}/release/${BINARY_NAME}"
 
 read -rsp "==> Remote sudo password for ${SERVER}: " SUDO_PASS
