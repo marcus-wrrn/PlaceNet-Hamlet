@@ -36,8 +36,8 @@ echo
 echo "==> Building ${BINARY_NAME} for ${BUILD_TARGET}..."
 cargo build --release --target "$BUILD_TARGET"
 
-# echo "==> Ensuring remote directory exists..."
-# ssh "$SERVER" "sudo mkdir -p '${DEPLOY_PATH}'"
+echo "==> Ensuring remote directory exists..."
+echo "$SUDO_PASS" | ssh "$SERVER" "sudo mkdir -p '${DEPLOY_PATH}'"
 
 echo "==> Copying binary to ${SERVER}:${DEPLOY_PATH}/${BINARY_NAME}..."
 scp "$BINARY_PATH" "${SERVER}:/tmp/${BINARY_NAME}"
