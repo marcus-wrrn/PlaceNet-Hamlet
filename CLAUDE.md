@@ -45,9 +45,10 @@ hamlet/
     │   │   ├── manager.rs       ← register_onto(), start_cloud_gateway()
     │   │   └── messages.rs      ← GatewayMessage enum (Register, Connect, ConnectRequest, Relay, Ack)
     │   ├── local_gateway/
-    │   │   ├── mod.rs           ← re-exports GatewayService
+    │   │   ├── mod.rs           ← re-exports GatewayService, BeaconRegistry
     │   │   ├── gateway_service.rs ← GatewayService, ManagedService impl
     │   │   ├── manager.rs       ← register_onto(), start_gateway()
+    │   │   ├── registry.rs      ← BeaconRegistry — tracks per-beacon MQTT topics, gateway associations, and timeout sweeps
     │   │   ├── tasks.rs         ← spawn_tls_accept_loop(), spawn_plain_accept_loop() — tokio task helpers
     │   │   ├── tls.rs           ← build_tls_config() — rustls ServerConfig from CaService
     │   │   ├── handshake.rs     ← DeviceInfo, MqttBrokerageInfo, EnrichedRegistrationMessage, build_brokerage_info()
