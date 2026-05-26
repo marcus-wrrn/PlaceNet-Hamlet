@@ -31,6 +31,8 @@ impl BroadcastState {
     /// TODO: Add rotating encryption keys + dynamic broadcast intervals
     pub async fn run_broadcast_loop(self) {
         let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(30));
+        let use_jitter = true;
+
         loop {
             interval.tick().await;
             // TODO: Expand upon payload content
@@ -39,6 +41,12 @@ impl BroadcastState {
 
             let topics = self.broadcast_topics.read().await;
             for topic in topics.iter() {
+                // Jitter is used for testing only -> should be removed during production
+                if use_jitter {
+                    let jitter_secs = rand::random::<u64>() % 10 + 1;
+                    tokio::time::sleep(tokio::time::Duration::from_secs(jitter_secs)).await;
+                }
+                
                 if let Err(e) = self
                     .mqtt_handle.publish(topic, QoS::AtLeastOnce, payload_str.clone())
                     .await
