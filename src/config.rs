@@ -241,7 +241,18 @@ pub struct BeaconManagementConfig {
     /// Intended for testing only — prevents packet collisions when multiple
     /// beacons are both transmitting and receiving simultaneously.
     pub use_jitter: bool,
-    pub broadcast_interval: u16
+    /// How often (in seconds) the home node publishes its URL to beacon topics.
+    pub broadcast_interval: u16,
+    /// How long (in seconds) each broadcast key remains the active outbound key
+    /// before being rotated. A new key is generated and distributed to beacons
+    /// at the start of the next broadcast cycle after this interval elapses.
+    /// Default: 3600 (1 hour).
+    pub key_rotation_interval: u32,
+    /// How long (in seconds) a retired broadcast key is kept in the database
+    /// after rotation. Must be greater than `key_rotation_interval` so that
+    /// beacons that miss a rotation broadcast can still verify incoming messages
+    /// with the old key. Default: 7200 (2 hours).
+    pub key_expiry: u32,
 }
 
 impl BeaconManagementConfig {
@@ -255,8 +266,18 @@ impl BeaconManagementConfig {
             .trim()
             .parse::<u16>()
             .unwrap_or(60);
+        let key_rotation_interval = std::env::var("KEY_ROTATION_INTERVAL")
+            .unwrap_or_else(|_| "3600".to_string())
+            .trim()
+            .parse::<u32>()
+            .unwrap_or(3600);
+        let key_expiry = std::env::var("KEY_EXPIRY")
+            .unwrap_or_else(|_| "7200".to_string())
+            .trim()
+            .parse::<u32>()
+            .unwrap_or(7200);
 
-        Self { use_jitter, broadcast_interval }
+        Self { use_jitter, broadcast_interval, key_rotation_interval, key_expiry }
     }
 }
 

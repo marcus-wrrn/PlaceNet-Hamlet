@@ -12,7 +12,8 @@ hamlet/
 ├── migrations/
 │   ├── 0001_ca_keys.sql         ← CA root key/cert storage
 │   ├── 0002_device_certs.sql    ← Issued device cert records
-│   └── 0003_node_identity.sql   ← This node's own MQTT client cert + key
+│   ├── 0003_node_identity.sql   ← This node's own MQTT client cert + key
+│   └── 0004_broadcast_keys.sql  ← AES-128 broadcast auth keys (rotation + expiry)
 ├── static/
 │   └── index.html               ← (upstream app content, not served by hamlet)
 ├── tests/
@@ -44,22 +45,16 @@ hamlet/
     │   │   ├── cloud_gateway_service.rs ← CloudGatewayService, CloudGatewayHandle, ManagedService impl
     │   │   ├── manager.rs       ← register_onto(), start_cloud_gateway()
     │   │   └── messages.rs      ← GatewayMessage enum (Register, Connect, ConnectRequest, Relay, Ack)
-    │   ├── local_gateway/
-    │   │   ├── mod.rs           ← re-exports GatewayService, BeaconRegistry
+    │   ├── beacon_management/
+    │   │   ├── mod.rs             ← re-exports BroadcastKeyManagement, BeaconRegistry
     │   │   ├── gateway_service.rs ← GatewayService, ManagedService impl
-    │   │   ├── manager.rs       ← register_onto(), start_gateway()
-    │   │   ├── registry.rs      ← BeaconRegistry — tracks per-beacon MQTT topics, gateway associations, and timeout sweeps
-    │   │   ├── tasks.rs         ← spawn_tls_accept_loop(), spawn_plain_accept_loop() — tokio task helpers
-    │   │   ├── tls.rs           ← build_tls_config() — rustls ServerConfig from CaService
-    │   │   ├── handshake.rs     ← DeviceInfo, MqttBrokerageInfo, EnrichedRegistrationMessage, build_brokerage_info()
-    │   │   ├── handlers.rs      ← handle_device_init(), handle_client_register()
-    │   │   ├── headers.rs       ← HEADER_INIT, HEADER_REGISTER — PlaceNet HTTP header name constants
-    │   │   ├── proxy.rs         ← dispatch(), try_forward(), serve_connection(), serve_tls_connection()
-    │   │   ├── requests.rs      ← DeviceInitRequest struct + process_request() — parses version, broker_host, device from Request
-    │   │   ├── response.rs      ← text_response(), json_response() helpers
+    │   │   ├── manager.rs         ← register_onto(), start_gateway(), build_brokerage_info(), TopicChannel
+    │   │   ├── key_management.rs  ← BroadcastKeyManagement — AES-128 key rotation, HMAC token generation, DB persistence
+    │   │   ├── registry.rs        ← BeaconRegistry — tracks per-beacon MQTT topics, gateway associations, and timeout sweeps
+    │   │   ├── tasks.rs           ← spawn_tls_accept_loop(), spawn_plain_accept_loop() — tokio task helpers
     │   │   └── internals/
-    │   │       ├── mod.rs       ← re-exports from types.rs
-    │   │       └── types.rs     ← AppState, BoundGateway, BoxError, ProxyBody, SUPPORTED_VERSION, BODY_LIMIT
+    │   │       ├── mod.rs         ← re-exports from types.rs
+    │   │       └── types.rs       ← AppState, BoundGateway, BoxError, ProxyBody, SUPPORTED_VERSION, BODY_LIMIT
     │   ├── mqtt_brokerage/
     │   │   ├── mod.rs           ← re-exports MosquittoBrokerageService, MqttBrokerageHandle, provision_broker_cert
     │   │   ├── mosquitto_brokerage_service.rs ← MosquittoBrokerageService, MqttBrokerageHandle (spawns mosquitto process)

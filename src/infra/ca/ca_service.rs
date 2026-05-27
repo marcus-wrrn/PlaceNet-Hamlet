@@ -203,6 +203,14 @@ impl CaService {
         Ok((cert_pem, key_pem))
     }
 
+    /// Return a clone of the underlying SQLite pool.
+    ///
+    /// Intended for use by other services (e.g. `BroadcastKeyManagement`) that
+    /// share the same database and benefit from running migrations in a single pass.
+    pub fn pool(&self) -> SqlitePool {
+        self.pool.clone()
+    }
+
     /// Returns `true` if the device has a revoked certificate.
     pub async fn is_revoked(&self, device_id: &str) -> Result<bool, String> {
         let row: Option<(i64,)> =

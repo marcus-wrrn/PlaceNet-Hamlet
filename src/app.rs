@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::{mpsc, RwLock};
 use tracing::info;
 use crate::config::{self, Config};
@@ -10,7 +11,7 @@ use rumqttc::QoS;
 use crate::services::mqtt_client::provision_node_identity;
 use crate::infra::ca::CaService;
 use crate::services::beacon_management::manager::{register_onto as register_gateway, start_gateway, build_brokerage_info, TopicChannel};
-use crate::services::beacon_management::BeaconRegistry;
+use crate::services::beacon_management::{BeaconRegistry, BroadcastKeyManagement};
 use crate::services::cloud_gateway::manager::{register_onto as register_cloud_gateway, start_cloud_gateway};
 use crate::services::cloud_gateway::{connect_to_gateway, messages::GatewayMessage};
 use crate::services;
@@ -23,14 +24,18 @@ pub struct BroadcastState {
     broadcast_topics: Arc<RwLock<Vec<String>>>,
     use_jitter: bool,
     broadcast_interval: u16,
+    key_management: Arc<BroadcastKeyManagement>,
 }
 
 impl BroadcastState {
     /// Periodically publishes this node's `server_url` to all registered beacon topics.
     ///
-    /// Fires every 30 seconds. Iterates over `broadcast_topics` and publishes a JSON payload
-    /// `{"server_url": "..."}` to each topic at QoS 1. Runs until the task is cancelled.
-    /// TODO: Add rotating encryption keys + dynamic broadcast intervals
+    /// On each cycle the broadcast key is checked and rotated if its `rotates_at` deadline
+    /// has passed. The payload includes a 4-byte key ID (`kid`) and a 4-byte truncated
+    /// HMAC-SHA256 token (`tok`) so beacons can authenticate the sender without receiving
+    /// key material over the air. Both fields are 8-char lowercase hex strings.
+    ///
+    /// Expired keys are swept from the database once per cycle. Runs until cancelled.
     pub async fn run_broadcast_loop(self) {
         let base_interval = tokio::time::Duration::from_secs(self.broadcast_interval as u64);
         let mut interval = tokio::time::interval(base_interval);
@@ -38,8 +43,27 @@ impl BroadcastState {
         loop {
             interval.tick().await;
 
-            // TODO: Expand upon payload content
-            let payload = serde_json::json!({ "server_url": self.server_url, "beaconId": "random_string" });
+            // Rotate key if needed and obtain the current active key.
+            let key = match self.key_management.get_or_rotate_key().await {
+                Ok(k) => k,
+                Err(e) => {
+                    tracing::error!("Failed to get broadcast key — skipping cycle: {}", e);
+                    continue;
+                }
+            };
+
+            // Sweep expired keys once per cycle (cheap indexed DELETE).
+            if let Err(e) = self.key_management.sweep_expired().await {
+                tracing::warn!("Failed to sweep expired broadcast keys: {}", e);
+            }
+
+            // Build the over-the-air fields: 8-char hex key ID + 8-char hex HMAC token.
+            let (kid, tok) = self.key_management.ota_fields(&key);
+            let payload = serde_json::json!({
+                "server_url": self.server_url,
+                "kid": kid,
+                "tok": tok,
+            });
             let payload_str = payload.to_string();
             let cycle_start = self.use_jitter.then(tokio::time::Instant::now);
 
@@ -56,7 +80,7 @@ impl BroadcastState {
                 {
                     tracing::error!(topic, "Failed to publish beacon broadcast: {}", e);
                 } else {
-                    info!(topic, "Broadcast published to beacon topic");
+                    info!(topic, kid, "Broadcast published to beacon topic");
                 }
             }
 
@@ -74,7 +98,7 @@ impl BroadcastState {
 pub struct App {
     /// Kept alive to drive the supervisor task until shutdown.
     _supervisor_handle: SupervisorHandle,
-    /// Sends beacon messages from brokerage to service 
+    /// Sends beacon messages from brokerage to service
     beacon_inbound_rx: MqttMessageReceiver,
     mqtt_handle: MqttClientHandle,
     server_url: String,
@@ -83,6 +107,7 @@ pub struct App {
     beacon_topic_rx: mpsc::Receiver<TopicChannel>,
     broadcast_topics: Arc<RwLock<Vec<String>>>,
     beacon_config: config::BeaconManagementConfig,
+    key_management: Arc<BroadcastKeyManagement>,
 }
 
 impl App {
@@ -175,6 +200,16 @@ impl App {
         }
 
         let broadcast_topics: Arc<RwLock<Vec<String>>> = Arc::new(RwLock::new(Vec::new()));
+
+        // ── Build broadcast key manager ──────────────────────────────────────
+        // Re-uses the CA DB pool so the broadcast_keys table is covered by the
+        // same migration run performed during CaService::init().
+        let key_management = Arc::new(BroadcastKeyManagement::new(
+            ca_service.pool(),
+            Duration::from_secs(config.beacon_management.key_rotation_interval as u64),
+            Duration::from_secs(config.beacon_management.key_expiry as u64),
+        ));
+
         Self {
             _supervisor_handle: supervisor_handle,
             beacon_inbound_rx: inbound_rx,
@@ -184,6 +219,7 @@ impl App {
             beacon_topic_rx,
             broadcast_topics,
             beacon_config: config.beacon_management,
+            key_management,
         }
     }
 
@@ -193,7 +229,8 @@ impl App {
             mqtt_handle: self.mqtt_handle.clone(),
             broadcast_topics: Arc::clone(&self.broadcast_topics),
             use_jitter: self.beacon_config.use_jitter,
-            broadcast_interval: self.beacon_config.broadcast_interval
+            broadcast_interval: self.beacon_config.broadcast_interval,
+            key_management: Arc::clone(&self.key_management),
         }
     }
 
