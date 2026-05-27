@@ -60,7 +60,7 @@ impl BroadcastState {
             // Build the over-the-air fields: 8-char hex key ID + 8-char hex HMAC token.
             let (kid, tok) = self.key_management.ota_fields(&key);
             let payload = serde_json::json!({
-                "server_url": self.server_url,
+                "url": self.server_url,
                 "kid": kid,
                 "tok": tok,
             });
