@@ -27,6 +27,7 @@ impl MqttClientConfig {
             .unwrap_or_else(|_| "false".to_string())
             .trim()
             .eq_ignore_ascii_case("true");
+
         let port: u16 = if tls_enabled {
             std::env::var("MQTTS_PORT")
                 .unwrap_or_else(|_| "8883".to_string())
@@ -234,6 +235,31 @@ impl HttpConfig {
 //     }
 // }
 
+/// Configuration for the beacon management service.
+pub struct BeaconManagementConfig {
+    /// When true, a random jitter delay is inserted between beacon broadcasts.
+    /// Intended for testing only — prevents packet collisions when multiple
+    /// beacons are both transmitting and receiving simultaneously.
+    pub use_jitter: bool,
+    pub broadcast_interval: u16
+}
+
+impl BeaconManagementConfig {
+    fn from_env() -> Self {
+        let use_jitter = std::env::var("USE_NETWORK_JITTER")
+            .unwrap_or_else(|_| "false".to_string())
+            .trim()
+            .eq_ignore_ascii_case("true");
+        let broadcast_interval = std::env::var("BROADCAST_INTERVAL")
+            .unwrap_or_else(|_| "60".to_string())
+            .trim()
+            .parse::<u16>()
+            .unwrap_or(60);
+
+        Self { use_jitter, broadcast_interval }
+    }
+}
+
 /// Configuration for cloud gateway registration.
 pub struct GatewayRegistrationConfig {
     /// This server's URL, used as its identity when registering with the cloud
@@ -263,6 +289,7 @@ pub struct Config {
     pub http: HttpConfig,
     // pub peer: PeerConfig,
     pub gateway_registration: GatewayRegistrationConfig,
+    pub beacon_management: BeaconManagementConfig,
     pub config_dir: PathBuf,
 }
 
@@ -284,6 +311,7 @@ impl Config {
         let http = HttpConfig::from_env();
         // let peer = PeerConfig::from_env();
         let gateway_registration = GatewayRegistrationConfig::from_env();
-        Self { mqtt_brokerage, mqtt_client, http, gateway_registration, config_dir }
+        let beacon_management = BeaconManagementConfig::from_env();
+        Self { mqtt_brokerage, mqtt_client, http, gateway_registration, beacon_management, config_dir }
     }
 }

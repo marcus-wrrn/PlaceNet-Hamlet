@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use tokio::sync::{mpsc, RwLock};
 use tracing::info;
-use crate::config::Config;
+use crate::config::{self, Config};
 use crate::services::mqtt_brokerage::manager::{register_onto as register_mqtt_broker, start_mosquitto_brokerage};
 use crate::services::mqtt_brokerage::provision_mqtt_broker_cert;
 use crate::services::mqtt_client::manager::{register_onto as register_mqtt_client, start_mqtt_client};
@@ -21,6 +21,8 @@ pub struct BroadcastState {
     server_url: String,
     mqtt_handle: MqttClientHandle,
     broadcast_topics: Arc<RwLock<Vec<String>>>,
+    use_jitter: bool,
+    broadcast_interval: u16,
 }
 
 impl BroadcastState {
@@ -30,23 +32,24 @@ impl BroadcastState {
     /// `{"server_url": "..."}` to each topic at QoS 1. Runs until the task is cancelled.
     /// TODO: Add rotating encryption keys + dynamic broadcast intervals
     pub async fn run_broadcast_loop(self) {
-        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(30));
-        let use_jitter = true;
+        let base_interval = tokio::time::Duration::from_secs(self.broadcast_interval as u64);
+        let mut interval = tokio::time::interval(base_interval);
 
         loop {
             interval.tick().await;
+
             // TODO: Expand upon payload content
             let payload = serde_json::json!({ "server_url": self.server_url, "beaconId": "random_string" });
             let payload_str = payload.to_string();
+            let cycle_start = self.use_jitter.then(tokio::time::Instant::now);
 
             let topics = self.broadcast_topics.read().await;
             for topic in topics.iter() {
-                // Jitter is used for testing only -> should be removed during production
-                if use_jitter {
+                if self.use_jitter {
                     let jitter_secs = rand::random::<u64>() % 10 + 1;
                     tokio::time::sleep(tokio::time::Duration::from_secs(jitter_secs)).await;
                 }
-                
+
                 if let Err(e) = self
                     .mqtt_handle.publish(topic, QoS::AtLeastOnce, payload_str.clone())
                     .await
@@ -54,6 +57,14 @@ impl BroadcastState {
                     tracing::error!(topic, "Failed to publish beacon broadcast: {}", e);
                 } else {
                     info!(topic, "Broadcast published to beacon topic");
+                }
+            }
+
+            if let Some(start) = cycle_start {
+                let elapsed = start.elapsed();
+                let remaining = base_interval.saturating_sub(elapsed);
+                if !remaining.is_zero() {
+                    tokio::time::sleep(remaining).await;
                 }
             }
         }
@@ -71,6 +82,7 @@ pub struct App {
     /// Used to subscribe to new topics during beacon handshake
     beacon_topic_rx: mpsc::Receiver<TopicChannel>,
     broadcast_topics: Arc<RwLock<Vec<String>>>,
+    beacon_config: config::BeaconManagementConfig,
 }
 
 impl App {
@@ -171,6 +183,7 @@ impl App {
             own_gateway_url: config.gateway_registration.gateway_url,
             beacon_topic_rx,
             broadcast_topics,
+            beacon_config: config.beacon_management,
         }
     }
 
@@ -179,6 +192,8 @@ impl App {
             server_url: self.server_url.clone(),
             mqtt_handle: self.mqtt_handle.clone(),
             broadcast_topics: Arc::clone(&self.broadcast_topics),
+            use_jitter: self.beacon_config.use_jitter,
+            broadcast_interval: self.beacon_config.broadcast_interval
         }
     }
 
