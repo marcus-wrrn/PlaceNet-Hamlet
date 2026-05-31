@@ -1,8 +1,12 @@
+use std::path::Path;
+use std::sync::Arc;
+
 use async_trait::async_trait;
-use rumqttc::{AsyncClient, MqttOptions, QoS, Transport};
+use rumqttc::{AsyncClient, MqttOptions, QoS, TlsConfiguration, Transport};
+use rustls::{ClientConfig, RootCertStore};
 use tokio::sync::{mpsc, oneshot};
 
-use crate::config::MqttClientConfig;
+use crate::config::{MqttClientConfig, MqttTlsMode};
 use crate::supervisor::ManagedService;
 use super::internals::{MqttCommand, MqttMessageSender, MqttOutboundReceiver, TopicSubscription};
 use super::tasks;
@@ -122,29 +126,74 @@ impl MqttClientService {
         Ok((cmd_rx, out_rx, connected_tx))
     }
 
-    async fn build_mqtt_opts(&self) -> Result<MqttOptions, String> {
-        let mut opts =
-            MqttOptions::new(&self.config.client_id, &self.config.host, self.config.port);
-        opts.set_keep_alive(std::time::Duration::from_secs(30));
+}
 
-        if self.config.tls_enabled {
-            let ca = tokio::fs::read(&self.config.cafile).await.map_err(|e| {
-                format!("Failed to read CA cert '{}': {}", self.config.cafile.display(), e)
+/// Build `MqttOptions` from a client config, applying TLS and credentials as
+/// independent axes:
+/// - [`MqttTlsMode::None`]: plaintext + username/password.
+/// - [`MqttTlsMode::ServerOnly`]: verify the broker (pinned `cafile` or webpki
+///   roots) + username/password — used for the cloud gateway link.
+/// - [`MqttTlsMode::Mutual`]: client cert/key are the identity (no password).
+///
+/// Shared by both the local-broker client and the cloud gateway service.
+pub async fn build_mqtt_opts(config: &MqttClientConfig) -> Result<MqttOptions, String> {
+    let mut opts = MqttOptions::new(&config.client_id, &config.host, config.port);
+    opts.set_keep_alive(std::time::Duration::from_secs(30));
+
+    match config.tls_mode {
+        MqttTlsMode::None => {
+            opts.set_credentials(&config.username, &config.password);
+        }
+        MqttTlsMode::ServerOnly => {
+            let tls = build_server_tls(config.cafile.as_deref()).await?;
+            opts.set_transport(Transport::Tls(tls));
+            opts.set_credentials(&config.username, &config.password);
+        }
+        MqttTlsMode::Mutual => {
+            let cafile = config.cafile.as_deref().ok_or("Mutual TLS requires a CA file")?;
+            let certfile = config.certfile.as_deref().ok_or("Mutual TLS requires a client cert")?;
+            let keyfile = config.keyfile.as_deref().ok_or("Mutual TLS requires a client key")?;
+            let ca = tokio::fs::read(cafile).await.map_err(|e| {
+                format!("Failed to read CA cert '{}': {}", cafile.display(), e)
             })?;
-            let cert = tokio::fs::read(&self.config.certfile).await.map_err(|e| {
-                format!("Failed to read client cert '{}': {}", self.config.certfile.display(), e)
+            let cert = tokio::fs::read(certfile).await.map_err(|e| {
+                format!("Failed to read client cert '{}': {}", certfile.display(), e)
             })?;
-            let key = tokio::fs::read(&self.config.keyfile).await.map_err(|e| {
-                format!("Failed to read client key '{}': {}", self.config.keyfile.display(), e)
+            let key = tokio::fs::read(keyfile).await.map_err(|e| {
+                format!("Failed to read client key '{}': {}", keyfile.display(), e)
             })?;
             opts.set_transport(Transport::tls(ca, Some((cert, key)), None));
-        } else {
-            opts.set_credentials(&self.config.username, &self.config.password);
         }
-
-        Ok(opts)
     }
 
+    Ok(opts)
+}
+
+/// Build a server-authenticated (no client auth) rustls config. Uses the pinned
+/// `cafile` when provided, otherwise the bundled webpki root store.
+async fn build_server_tls(cafile: Option<&Path>) -> Result<TlsConfiguration, String> {
+    let mut roots = RootCertStore::empty();
+
+    if let Some(cafile) = cafile {
+        let pem = tokio::fs::read(cafile)
+            .await
+            .map_err(|e| format!("Failed to read gateway CA '{}': {}", cafile.display(), e))?;
+        let mut reader = std::io::BufReader::new(pem.as_slice());
+        for cert in rustls_pemfile::certs(&mut reader) {
+            let cert = cert.map_err(|e| format!("Failed to parse gateway CA: {e}"))?;
+            roots
+                .add(cert)
+                .map_err(|e| format!("Failed to add gateway CA: {e}"))?;
+        }
+    } else {
+        roots.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+    }
+
+    let config = ClientConfig::builder()
+        .with_root_certificates(roots)
+        .with_no_client_auth();
+
+    Ok(TlsConfiguration::Rustls(Arc::new(config)))
 }
 
 #[async_trait]
@@ -157,7 +206,7 @@ impl ManagedService for MqttClientService {
         let (cmd_rx, out_rx, connected_tx) = self.take_channels()?;
         let msg_tx = self.msg_tx.clone();
 
-        let opts = self.build_mqtt_opts().await?;
+        let opts = build_mqtt_opts(&self.config).await?;
         let (client, eventloop) = AsyncClient::new(opts, 10);
 
         let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();

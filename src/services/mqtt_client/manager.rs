@@ -73,14 +73,18 @@ pub async fn start_mqtt_client(
 }
 
 pub async fn provision_node_identity(ca: &CaService, cfg: &MqttClientConfig) -> Result<(), String> {
+    let certfile = cfg.certfile.as_deref()
+        .ok_or("provision_node_identity requires a client cert path")?;
+    let keyfile = cfg.keyfile.as_deref()
+        .ok_or("provision_node_identity requires a client key path")?;
     let (cert_pem, key_pem) = ca.ensure_node_identity().await?;
-    if let Some(parent) = cfg.certfile.parent() {
+    if let Some(parent) = certfile.parent() {
         tokio::fs::create_dir_all(parent).await
             .map_err(|e| format!("Failed to create cert dir: {e}"))?;
     }
-    tokio::fs::write(&cfg.certfile, &cert_pem).await
+    tokio::fs::write(certfile, &cert_pem).await
         .map_err(|e| format!("Failed to write node cert: {e}"))?;
-    tokio::fs::write(&cfg.keyfile, &key_pem).await
+    tokio::fs::write(keyfile, &key_pem).await
         .map_err(|e| format!("Failed to write node key: {e}"))?;
     Ok(())
 }

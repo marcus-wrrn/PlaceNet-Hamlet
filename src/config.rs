@@ -1,20 +1,36 @@
 use std::path::PathBuf;
 use tracing::info;
 
+/// How an MQTT client authenticates its transport to a broker.
+///
+/// TLS and credentials are independent axes: `ServerOnly` verifies the broker's
+/// certificate (public CA or pinned `cafile`) while still authenticating the
+/// client with username/password — the mode used for the cloud gateway link.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MqttTlsMode {
+    /// Plaintext transport; client authenticates with username/password.
+    None,
+    /// Server-authenticated TLS; client authenticates with username/password.
+    ServerOnly,
+    /// Mutual TLS; the client certificate IS the identity (no password).
+    Mutual,
+}
+
 pub struct MqttClientConfig {
     pub client_id: String,
     pub host: String,
     pub port: u16,
-    pub tls_enabled: bool,
-    /// Path to the CA certificate used to verify the broker's TLS certificate.
-    pub cafile: PathBuf,
-    /// Path to this node's client certificate (used for TLS mutual auth).
-    pub certfile: PathBuf,
-    /// Path to this node's client private key (used for TLS mutual auth).
-    pub keyfile: PathBuf,
-    /// Username for plain (non-TLS) MQTT auth.
+    pub tls_mode: MqttTlsMode,
+    /// CA certificate used to verify the broker. When `None` under `ServerOnly`,
+    /// the platform/webpki root store is used (for a public CA like Let's Encrypt).
+    pub cafile: Option<PathBuf>,
+    /// This node's client certificate (Mutual only).
+    pub certfile: Option<PathBuf>,
+    /// This node's client private key (Mutual only).
+    pub keyfile: Option<PathBuf>,
+    /// Username for password auth (`None` / `ServerOnly`).
     pub username: String,
-    /// Password for plain (non-TLS) MQTT auth.
+    /// Password for password auth (`None` / `ServerOnly`).
     pub password: String,
 }
 
@@ -23,12 +39,13 @@ impl MqttClientConfig {
         let client_id = std::env::var("MQTT_CLIENT_ID")
             .unwrap_or_else(|_| "hamlet".to_string());
         let host = "localhost".to_string();
-        let tls_enabled = std::env::var("MQTT_TLS_ENABLED")
+        let mutual = std::env::var("MQTT_TLS_ENABLED")
             .unwrap_or_else(|_| "false".to_string())
             .trim()
             .eq_ignore_ascii_case("true");
+        let tls_mode = if mutual { MqttTlsMode::Mutual } else { MqttTlsMode::None };
 
-        let port: u16 = if tls_enabled {
+        let port: u16 = if mutual {
             std::env::var("MQTTS_PORT")
                 .unwrap_or_else(|_| "8883".to_string())
                 .parse()
@@ -39,21 +56,21 @@ impl MqttClientConfig {
                 .parse()
                 .unwrap_or(1883)
         };
-        let cafile = config_dir.join(
+        let cafile = Some(config_dir.join(
             std::env::var("MQTT_CAFILE").unwrap_or_else(|_| "certs/ca.crt".to_string()),
-        );
-        let certfile = config_dir.join(
+        ));
+        let certfile = Some(config_dir.join(
             std::env::var("MQTT_CLIENT_CERTFILE").unwrap_or_else(|_| "certs/client.crt".to_string()),
-        );
-        let keyfile = config_dir.join(
+        ));
+        let keyfile = Some(config_dir.join(
             std::env::var("MQTT_CLIENT_KEYFILE").unwrap_or_else(|_| "certs/client.key".to_string()),
-        );
+        ));
         let username = std::env::var("MQTT_USERNAME")
             .unwrap_or_else(|_| "placenet".to_string());
         let password = std::env::var("MQTT_PASSWORD")
             .unwrap_or_else(|_| "changeme".to_string());
 
-        Self { client_id, host, port, tls_enabled, cafile, certfile, keyfile, username, password }
+        Self { client_id, host, port, tls_mode, cafile, certfile, keyfile, username, password }
     }
 }
 
@@ -283,16 +300,27 @@ impl BeaconManagementConfig {
 
 /// Configuration for cloud gateway registration.
 pub struct GatewayRegistrationConfig {
-    /// This server's URL, used as its identity when registering with the cloud
-    /// gateway and when enriching forwarded registration messages.
+    /// This server's URL, used as its identity when enriching forwarded
+    /// registration messages and for beacon-advertised gateway comparison.
     /// e.g. "https://home-a.example.local:8080"
     /// Does not need to be internet-routable; it is used as an opaque ID.
     pub server_url: String,
 
-    /// URL of the cloud gateway WebSocket endpoint.
-    /// e.g. "ws://gateway.example.com:9000"
-    /// Must be reachable from the open internet.
+    /// Base URL of the cloud gateway HTTPS API, e.g. "https://gateway.example.com:8443".
+    /// `/api/login` is appended. When unset, the cloud gateway client is disabled.
     pub gateway_url: Option<String>,
+
+    /// Credentials used to authenticate this Hamlet to the gateway's `/api/login`.
+    pub username: String,
+    pub password: String,
+
+    /// Pinned CA for verifying the gateway's MQTTS broker. When `None`, the
+    /// platform/webpki root store is used (public CA such as Let's Encrypt).
+    pub broker_cafile: Option<PathBuf>,
+
+    /// Whether to connect to the gateway broker over TLS (default true).
+    /// Set false only for local plaintext testing.
+    pub broker_tls: bool,
 }
 
 impl GatewayRegistrationConfig {
@@ -300,7 +328,15 @@ impl GatewayRegistrationConfig {
         let server_url = std::env::var("PLACENET_SERVER_URL")
             .unwrap_or_else(|_| "http://localhost:8080".to_string());
         let gateway_url = std::env::var("PLACENET_GATEWAY_URL").ok();
-        Self { server_url, gateway_url }
+        let username = std::env::var("PLACENET_GATEWAY_USERNAME").unwrap_or_default();
+        let password = std::env::var("PLACENET_GATEWAY_PASSWORD").unwrap_or_default();
+        let broker_cafile = std::env::var("PLACENET_GATEWAY_MQTT_CAFILE")
+            .ok()
+            .map(PathBuf::from);
+        let broker_tls = std::env::var("PLACENET_GATEWAY_MQTT_TLS")
+            .map(|v| v.trim().eq_ignore_ascii_case("true"))
+            .unwrap_or(true);
+        Self { server_url, gateway_url, username, password, broker_cafile, broker_tls }
     }
 }
 

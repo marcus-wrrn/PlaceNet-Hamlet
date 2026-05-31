@@ -12,8 +12,8 @@ use crate::services::mqtt_client::provision_node_identity;
 use crate::infra::ca::CaService;
 use crate::services::beacon_management::manager::{register_onto as register_gateway, start_gateway, build_brokerage_info, TopicChannel};
 use crate::services::beacon_management::{BeaconRegistry, BroadcastKeyManagement};
-use crate::services::cloud_gateway::manager::{register_onto as register_cloud_gateway, start_cloud_gateway};
 use crate::services::cloud_gateway::{connect_to_gateway, messages::GatewayMessage};
+use crate::services::gateway_mqtt::manager::{register_onto as register_gateway_mqtt, start_gateway_mqtt};
 use crate::services;
 use crate::supervisor::{Supervisor, SupervisorHandle};
 
@@ -156,7 +156,7 @@ impl App {
         register_gateway(&mut supervisor, config.http, brokerage_info, brokerage_handle, ca_service.clone(), Some(beacon_topic_tx));
 
         // ── Provision node identity for MQTT mutual TLS ──────────────────
-        if config.mqtt_client.tls_enabled {
+        if config.mqtt_client.tls_mode == config::MqttTlsMode::Mutual {
             if let Err(e) = provision_node_identity(&ca_service, &config.mqtt_client).await {
                 tracing::error!("{}", e);
                 std::process::exit(1);
@@ -170,13 +170,9 @@ impl App {
         let _outbound_tx = mqtt_handles.outbound_tx;
         let mqtt_connected_rx = mqtt_handles.connected_rx;
 
-        // ── Register cloud gateway client ────────────────────────────────
-        let cloud_gateway_handle = register_cloud_gateway(
-            &mut supervisor,
-            config.gateway_registration.server_url.clone(),
-            config.gateway_registration.gateway_url.clone(),
-        );
-        let cloud_gateway_available = cloud_gateway_handle.is_some();
+        // ── Register cloud gateway client (HTTPS login + MQTTS) ──────────
+        let gateway_mqtt_handle = register_gateway_mqtt(&mut supervisor, &config.gateway_registration);
+        let cloud_gateway_available = gateway_mqtt_handle.is_some();
 
         let supervisor_handle = supervisor.spawn();
 
@@ -196,7 +192,7 @@ impl App {
 
         start_gateway(&supervisor_handle).await;
         if cloud_gateway_available {
-            start_cloud_gateway(&supervisor_handle).await;
+            start_gateway_mqtt(&supervisor_handle).await;
         }
 
         let broadcast_topics: Arc<RwLock<Vec<String>>> = Arc::new(RwLock::new(Vec::new()));

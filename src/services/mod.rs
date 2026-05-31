@@ -1,5 +1,6 @@
 pub mod capabilities;
 pub mod cloud_gateway;
+pub mod gateway_mqtt;
 pub mod beacon_management;
 pub mod mqtt_brokerage;
 pub mod mqtt_client;
@@ -20,4 +21,5 @@ pub enum ServiceId {
     Mosquitto,
     MqttClient,
     CloudGateway,
+    GatewayMqttClient,
 }

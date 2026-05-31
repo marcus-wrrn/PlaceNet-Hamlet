@@ -40,11 +40,18 @@ hamlet/
     ├── services/
     │   ├── mod.rs               ← ServiceId enum (Gateway, Mosquitto, MqttClient, CloudGateway)
     │   ├── capabilities.rs      ← detect_capabilities() — checks for system binaries
-    │   ├── cloud_gateway/
+    │   ├── cloud_gateway/        ← LEGACY WebSocket relay client (used by the beacon-advertised gateway path; startup connection replaced by gateway_mqtt)
     │   │   ├── mod.rs           ← re-exports CloudGatewayService, CloudGatewayHandle, connect_to_gateway
     │   │   ├── cloud_gateway_service.rs ← CloudGatewayService, CloudGatewayHandle, ManagedService impl
     │   │   ├── manager.rs       ← register_onto(), start_cloud_gateway()
-    │   │   └── messages.rs      ← GatewayMessage enum (Register, Connect, ConnectRequest, Relay, Ack)
+    │   │   └── messages.rs      ← GatewayMessage enum (Register, Connect, ConnectRequest, BeaconRegistration, Relay, Ack)
+    │   ├── gateway_mqtt/         ← Cloud gateway client over HTTPS login + MQTTS (replaces the WS startup connection)
+    │   │   ├── mod.rs           ← re-exports GatewayMqttConfig, GatewayMqttHandle, GatewayMqttService
+    │   │   ├── gateway_mqtt_service.rs ← service struct, handle, ManagedService impl
+    │   │   ├── manager.rs       ← register_onto(), start_gateway_mqtt()
+    │   │   ├── login.rs         ← HTTPS POST /api/login client (hyper + tokio-rustls)
+    │   │   ├── protocol.rs      ← LoginRequest/Response, BrokerInfo, DeviceTopics, Envelope (mirrors the gateway crate)
+    │   │   └── tasks.rs         ← connection task: login → MQTTS connect → backoff → re-login
     │   ├── beacon_management/
     │   │   ├── mod.rs             ← re-exports BroadcastKeyManagement, BeaconRegistry
     │   │   ├── gateway_service.rs ← GatewayService, ManagedService impl
@@ -107,9 +114,11 @@ The current PlaceNet protocol version is `"0.0.1"` (checked via the `X-PlaceNet-
 - **Client**: Uses `rumqttc`. On startup, subscribes to the `"registration"` topic (QoS 1). Inbound messages are forwarded through `inbound_rx`. Control is via `MqttClientHandle` (subscribe/unsubscribe/publish with oneshot acknowledgement).
 - **Peer forwarding**: When `PEER_URL` is set, inbound registration messages are wrapped in `EnrichedRegistrationMessage` (adds `server_url` and `gateway_url`) and POSTed to the peer node.
 
-### Cloud Gateway Client
+### Cloud Gateway Client (HTTPS login + MQTTS)
 
-`CloudGatewayService` opens a persistent WebSocket to `{PLACENET_GATEWAY_URL}/ws` on startup. It immediately sends a `Register { server_url }` frame to announce this server's identity. The service then loops, forwarding outbound messages from `CloudGatewayHandle` and dispatching inbound frames (`ConnectRequest`, `Relay`, `Ack`). On disconnect it reconnects with exponential backoff (2 s → 60 s). The service is skipped (registered as `Unavailable`) when `PLACENET_GATEWAY_URL` is unset.
+`GatewayMqttService` (`services/gateway_mqtt/`) is the startup connection to the cloud gateway. On start it `POST`s its credentials to `{PLACENET_GATEWAY_URL}/api/login`, receives `{device_id, mqtt_username, mqtt_password, broker, topics}`, connects to the gateway's broker over MQTTS (server-authenticated TLS + username/password — `MqttTlsMode::ServerOnly`), subscribes to its `cmds`/`connect` topics, and publishes an `alive` envelope on its `notify` topic. Credentials are cached and reused across transport reconnects; a re-login is only triggered by an auth rejection (broker `ConnectionRefused` or HTTP 401). Reconnect uses exponential backoff (2 s → 60 s). The service is disabled when `PLACENET_GATEWAY_URL` (or the gateway username/password) is unset.
+
+The older `cloud_gateway/` WebSocket module is retained only for the beacon-advertised-gateway relay path (`connect_to_gateway` in `app.rs`); the gateway-side MQTT router that will replace it is deferred. MQTT transport auth is now a two-axis policy (`MqttTlsMode` = `None` / `ServerOnly` / `Mutual`), built by the shared `mqtt_client::build_mqtt_opts`.
 
 ### Supervisor
 
@@ -139,8 +148,12 @@ All config is loaded via `Config::from_env()`. Relevant variables:
 | `MQTT_CLIENT_CERTFILE` | `certs/client.crt` | Client cert for home node's MQTT mutual TLS |
 | `MQTT_CLIENT_KEYFILE` | `certs/client.key` | Client key for home node's MQTT mutual TLS |
 | `PEER_URL` | _(unset)_ | Base URL of peer hamlet node |
-| `PLACENET_SERVER_URL` | `http://localhost:8080` | This server's identity URL (opaque ID sent to gateway) |
-| `PLACENET_GATEWAY_URL` | _(unset)_ | Cloud gateway WebSocket URL — enables `CloudGatewayService` when set |
+| `PLACENET_SERVER_URL` | `http://localhost:8080` | This server's identity URL (opaque ID) |
+| `PLACENET_GATEWAY_URL` | _(unset)_ | Cloud gateway HTTPS base URL — enables `GatewayMqttService` when set (with username/password) |
+| `PLACENET_GATEWAY_USERNAME` | _(unset)_ | Login username for the cloud gateway |
+| `PLACENET_GATEWAY_PASSWORD` | _(unset)_ | Login password for the cloud gateway |
+| `PLACENET_GATEWAY_MQTT_CAFILE` | _(unset)_ | Pinned CA for the gateway broker; unset = public/webpki roots |
+| `PLACENET_GATEWAY_MQTT_TLS` | `true` | Connect to the gateway broker over TLS (false for local testing) |
 
 ## Key Conventions
 
