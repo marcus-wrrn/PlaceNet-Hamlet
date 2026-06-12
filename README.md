@@ -19,11 +19,11 @@ The project is currently in early Alpha. PlaceNet nodes are able to send message
 - Currently only supports the LilyGO T-Beam but more device support is planned.
 
 [PlaceNet Cloud Gateway](https://github.com/marcus-wrrn/PlaceNet-Cloud-Gateway)
-- Coordination server responsible for establishing P2P connections and managing high level network changes
+- Coordination server responsible for establishing P2P connections between Hamlet nodes
 
 ## Similar Projects
 
-PlaceNet is inspired by both Meshtastic, a mesh networking protocol based around offgrid communication with LoRa and Tailscale, a P2P VPN designed for connecting devices not available over the open internet.
+PlaceNet is inspired by both Meshtastic, a mesh networking protocol based around offgrid communication with LoRa, and Tailscale, a P2P VPN designed for connecting devices not available over the open internet. 
 
 [Meshatastic](https://meshtastic.org/docs/introduction/)
 [Tailscale](https://tailscale.com/blog/how-tailscale-works)
