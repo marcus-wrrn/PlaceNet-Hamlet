@@ -1,4 +1,4 @@
-## What is PlaceNet?
+## What is PlaceNet
 
 PlaceNet is a networking infrastructure built on top of a Proof of Presence (PoP) protocol for creating secure Peer to Peer (P2P) connections with other services within a range of about 1-2km. This is achieved by broadcasting rotating encryption keys over Long Range Radio (LoRa) for both discovery and authentication. Upon verifying that another node is within broadcast distance (~600m - ~2km) using PoP, the nodes will establish a P2P connection via WireGuard with the help of a Coordination server accessible over the open internet. Once connected, PlaceNet nodes are able to share content between themselves as if they were on the same network.
 
@@ -17,12 +17,13 @@ The project is currently in early Alpha. PlaceNet nodes are able to send message
 [PlaceNet Beacon](https://github.com/marcus-wrrn/PlaceNet-Beacon)
 - Device responsible for broadcasting PlaceNet messages over LoRa for authentication and discovery
 - Currently only supports the LilyGO T-Beam but more device support is planned.
+
 [PlaceNet Cloud Gateway](https://github.com/marcus-wrrn/PlaceNet-Cloud-Gateway)
 - Coordination server responsible for establishing P2P connections and managing high level network changes
 
 ## Similar Projects
 
-PlaceNet is greatly inspired by both Meshtastic and Tailscale. While PlaceNet differs in many ways, understanding what both of these projects are and how they work is really helpful for understanding the goal of PlaceNet.
+PlaceNet is inspired by both Meshtastic, a mesh networking protocol based around offgrid communication with LoRa and Tailscale, a P2P VPN designed for connecting devices not available over the open internet.
 
 [Meshatastic](https://meshtastic.org/docs/introduction/)
 [Tailscale](https://tailscale.com/blog/how-tailscale-works)
